@@ -1373,7 +1373,7 @@ observe({
 #********************************
 
   
-  observeEvent(input$calculate_cost,{
+  observeEvent(input$calc_all_gps,{
     
     if(is.null(paths$crop_name) | is.null(paths$input_data_dir)){
       sendSweetAlert(
@@ -1406,10 +1406,12 @@ observe({
       
     }else{
       
-      withBusyIndicatorServer("calculate_cost", { 
-        #source("www/scripts/03_gap_methods/cost_distance_function.R")
+      withBusyIndicatorServer("calc_all_gps", { 
         
-        # Cost distance process according with the level of analysis
+        print(">>> Calculating Accessibility geoscore: ")
+        
+        source("www/scripts/03_gap_methods/cost_distance_function.R")
+        
         cost_dist_function(
           cost_out_path = paths$cost_out_path,
           friction      = "www/masks/friction_surface.tif",
@@ -1418,21 +1420,53 @@ observe({
           sdm_path      = paths$sdm_occ_path
         )
         
+        print(">>> Accessibility Done")
+        
+        print(">>> Calculating Connectivity geoscore: ")
+        
+        source("www/scripts/03_gap_methods/delaunay.R")
+        source("www/scripts/03_gap_methods/delaunay_geo_score.R")
+        
+        calc_delaunay_score(
+          coreDir = paths$sp_results, 
+          ncores = NULL, 
+          validation = FALSE, 
+          pnt = NULL)
+        
+        print(">>> Connectivity Done")
         
         
-      })
-      updateButton(session, "calculate_cost",label = "Done",style = "success")
-      updateTabsetPanel(session, inputId = "cost_res", selected = "Results" )
-     
+        print(">>> Calculating Environmental geoscore: ")
+        source("www/scripts/03_gap_methods/ecogeo_cluster.R")
+        source("www/scripts/03_gap_methods/env_distance.R")
+        
+        calc_env_score(sdm_path = paths$sdm_occ_path, 
+                       clus_method = "hclust_mahalanobis", 
+                       gap_dir   = paths$gap_outDir, 
+                       occ_dir   = paths$sdm_outDir, 
+                       env_dir   = paths$generic_dir, 
+                       var_names = resources$var_names,
+                       n.sample  = input$nsample,
+                       n.clust   = input$nclust)
+        
+        print(">>> Environmental Done")
+        
+        
+        })
+      
+      updateButton(session, "calc_all_gps",label = "Done",style = "success")
+      updateTabsetPanel(session, inputId = "all_res", selected = "Results" )
+      
+      
     }
-    
-    
     
   })
   
+  
   output$map4 <- renderLeaflet({
-    
-    mp <- leaflet() %>% 
+    req(paths$cost_out_path)
+
+        mp <- leaflet() %>% 
       addTiles()
     
     if(!is.null(paths$cost_out_path) & file.exists(paths$cost_out_path)){
@@ -1461,67 +1495,9 @@ observe({
 ###### delaunay geo score ######
 ###############################
   
-  observeEvent(input$calculate_dela, {
-    
-    if(is.null(paths$crop_name) | is.null(paths$input_data_dir)){
-      sendSweetAlert(
-        session = session,
-        title = "Error !!",
-        text = "Please, write a Crop name and select a root folder from your computer.",
-        type = "error"
-      )
-      system.time(1)
-      updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Working directory" )
-    }else if(is.null(paths$mask_path)){
-      sendSweetAlert(
-        session = session,
-        title = "Error !!",
-        text = "Please, import a valid region raster mask..",
-        type = "error"
-      )
-      system.time(1)
-      updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Geographic area" )
-    }else if(is.null(paths$occName)){
-      
-      sendSweetAlert(
-        session = session,
-        title = "Error !!",
-        text = "Group/race/class not selected.",
-        type = "error"
-      )
-      system.time(1)
-      updateNavbarPage(session, inputId = "nvpage_tab2", selected = "Pseudo-absences" )
-      
-    }else{
-      
-      source("www/scripts/03_gap_methods/delaunay.R")
-      source("www/scripts/03_gap_methods/delaunay_geo_score.R")
-      
-      
-      withBusyIndicatorServer("calculate_dela", { 
-        
-        
-      calc_delaunay_score(
-        coreDir = paths$sp_results, 
-        ncores = NULL, 
-        validation = FALSE, 
-        pnt = NULL)
-        
-        
-        
-      })
-      
-      updateButton(session, "calculate_dela",label = "Done",style = "success")
-      updateTabsetPanel(session, inputId = "dela_res", selected = "Results" )
-      
-      
-    }
-      
-    
-  })
   
   output$map5 <- renderLeaflet({
-    
+    req(paths$dela_out_path)
     mp <- leaflet() %>% 
       addTiles()
     
@@ -1551,66 +1527,9 @@ observe({
 ##### environmental score ######
 ###############################
   
-  observeEvent(input$calculate_env, {
-    
-    if(is.null(paths$crop_name) | is.null(paths$input_data_dir)){
-      sendSweetAlert(
-        session = session,
-        title = "Error !!",
-        text = "Please, write a Crop name and select a root folder from your computer.",
-        type = "error"
-      )
-      system.time(1)
-      updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Working directory" )
-    }else if(is.null(paths$mask_path)){
-      sendSweetAlert(
-        session = session,
-        title = "Error !!",
-        text = "Please, import a valid region raster mask..",
-        type = "error"
-      )
-      system.time(1)
-      updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Geographic area" )
-    }else if(is.null(paths$occName)){
-      
-      sendSweetAlert(
-        session = session,
-        title = "Error !!",
-        text = "Group/race/class not selected.",
-        type = "error"
-      )
-      system.time(1)
-      updateNavbarPage(session, inputId = "nvpage_tab2", selected = "Pseudo-absences" )
-      
-    }else{
-      
-      source("www/scripts/03_gap_methods/ecogeo_cluster.R")
-      source("www/scripts/03_gap_methods/env_distance.R")
-      
-      withBusyIndicatorServer("calculate_env", { 
-        
-       
-        calc_env_score(sdm_path = paths$sdm_occ_path, 
-                       clus_method = "hclust_mahalanobis", 
-                       gap_dir   = paths$gap_outDir, 
-                       occ_dir   = paths$sdm_outDir, 
-                       env_dir   = paths$generic_dir, 
-                       var_names = resources$var_names,
-                       n.sample  = input$nsample,
-                       n.clust   = input$nclust)
-        
-      })
-      
-    }
-    
-    updateButton(session, "calculate_env",label = "Done",style = "success")
-    updateTabsetPanel(session, inputId = "env_res", selected = "Results" )
-    
-    
-  })
  
  output$map6 <- renderLeaflet({
-   
+   req(paths$envi_out_path)
    mp <- leaflet() %>% 
      addTiles()
    

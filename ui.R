@@ -373,7 +373,7 @@ body <- dashboardBody(uiOutput("modal1"),
                                 )
                          
                        ),
-                       tabPanel("Accessibility score",
+                       tabPanel("Geo-Scores",
                                 sidebarLayout(
                                   sidebarPanel(
                                     h3(tags$strong("Accessibility geo score")),
@@ -384,36 +384,8 @@ body <- dashboardBody(uiOutput("modal1"),
                                       selected = 1,
                                       options = list(
                                         style = "btn-primary")
-                                    )
-                                    ,
-                                    withBusyIndicatorUI(
-                                      bsButton("calculate_cost", size="default",label = "Calculate", block = F, style="primary")
-                                      
-                                    )
-                                    
-                                  ),
-                                  mainPanel(
-                                    tabBox(width = 12,
-                                           id = "cost_res",
-                                           tabPanel("Description",
-                                                    div(id = "desc_1", class = "card",
-                                                        shiny::includeMarkdown("Rmarkdown_files/cost_dist_desc.Rmd")
-                                                    )
-                                           ),
-                                           tabPanel("Results",
-                                                    div(id = "params_2", class = "card",
-                                                       leafletOutput("map4")
-                                                    )
-                                                    
-                                           )
-                                           
-                                    )
-                                  )
-                                )
-                       ),
-                       tabPanel("Connectivity score",
-                                sidebarLayout(
-                                  sidebarPanel(
+                                    ),
+                                    tags$hr(),
                                     h3(tags$strong("Connectivity geo score")),
                                     pickerInput(
                                       inputId = "Occ_sel",
@@ -423,42 +395,7 @@ body <- dashboardBody(uiOutput("modal1"),
                                       options = list(
                                         style = "btn-primary")
                                     ),
-                                    withBusyIndicatorUI(
-                                      bsButton("calculate_dela", size="default",label = "Calculate", block = F, style="primary")
-                                      
-                                    )
-                                    
-                                    
-                                    
-                                  ),
-                                  mainPanel(
-                                    tabBox(width = 12,
-                                           id = "dela_res",
-                                           tabPanel("Description",
-                                                    div(id = "desc_x", class = "card",
-                                                        shiny::includeMarkdown("Rmarkdown_files/delaunay_geo_score_desc.Rmd")
-                                                    )
-                                           ),
-                                           tabPanel("Results",
-                                                    div(id = "params_x", class = "card",
-                                                        leafletOutput("map5")
-                                                    )
-                                                    
-                                           )
-                                           
-                                    )
-                                    
-                                  )
-                                  
-                                )
-                                
-                                
-                                
-                                
-                                ),
-                       tabPanel("Environmental score",
-                                sidebarLayout(
-                                  sidebarPanel(
+                                    tags$hr(),
                                     h3(tags$strong("Environmental geo score")),
                                     numericInput(inputId = "nclust",
                                                  label = "Number of environmental cluster:",
@@ -466,40 +403,47 @@ body <- dashboardBody(uiOutput("modal1"),
                                                  min =2,
                                                  max = 45,
                                                  step = 1),
-                                    tags$hr(),
                                     sliderInput(inputId = "nsample",
                                                 label   = "Coordinates to sample: ",
                                                 min     = 2000,
                                                 max     = 20000,
                                                 value   = 5000
-                                                ),
+                                    ),
                                     withBusyIndicatorUI(
-                                      bsButton("calculate_env", size="default",label = "Calculate", block = F, style="primary")
+                                      bsButton("calc_all_gps", size="default",label = "Calculate", block = F, style="primary")
                                       
                                     )
+                                    
                                   ),
                                   mainPanel(
                                     tabBox(width = 12,
-                                           id = "env_res",
+                                           id = "all_res",
                                            tabPanel("Description",
-                                                    div(id = "desc_x1", class = "card",
-                                                        shiny::includeMarkdown("Rmarkdown_files/environ_desc.Rmd")
+                                                    div(id = "desc_1", class = "card",
+                                                        shiny::includeMarkdown("Rmarkdown_files/all_gp_scores_desc.Rmd")
                                                     )
                                            ),
                                            tabPanel("Results",
-                                                    div(id = "params_x1", class = "card",
-                                                        leafletOutput("map6")
+                                                    tagList(
+                                                      h3(tags$strong("Map: Accessibility geo score")),
+                                                      leafletOutput("map4"),
+                                                      tags$hr(),
+                                                      h3(tags$strong("Map: Connectivity geo score")),
+                                                      leafletOutput("map5"),
+                                                      tags$hr(),
+                                                      h3(tags$strong("Map: Environmental geo score")),
+                                                      leafletOutput("map6")
                                                     )
+                                                    # div(id = "params_2", class = "card",
+                                                    #    leafletOutput("map4")
+                                                    # )
                                                     
                                            )
                                            
                                     )
-                                    
                                   )
-                                  
                                 )
-                                
-                                ),
+                       ),
                        tabPanel("Geo score assessment",
                          sidebarLayout(
                            sidebarPanel(

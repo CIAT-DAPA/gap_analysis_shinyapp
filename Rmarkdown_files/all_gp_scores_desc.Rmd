@@ -1,0 +1,42 @@
+---
+title: "all_gps_description"
+output: html_document
+---
+  
+
+### **Accessibility geo score**
+
+***
+
+An accessibility gap score was calculated for each 2.5-arc-minute pixel in the distribution model by computing travel time from each pixel to its nearest genebank accession occurrence location based both on distance and the speed of travel, defined by a friction surface. Travel time scores were normalized by dividing pixel values by the longest travel time within the distribution model, with the final score ranging from 0 to 1. A high accessibility gap score value for a pixel reflects long travel times from existing genebank collection occurrences and, thus, represents a higher probability of the pixel location being a gap in existing ex situ collections.
+
+<img src="../Rmarkdown_files/imgs/cost_dist_map.png" alt="connectivity gap score" width="60%" height="50%" style="display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: '50%';" >
+
+ 
+  ### **Connectivity geo score**
+  
+***
+  
+Connectivity gap score is calculated for each 2.5-arc-minute pixel within the distribution model by drawing a triangle around each pixel using the three closest genebank accession occurrence locations as vertices and then deriving normalized values for the pixel based on distance to the triangle centroid and vertices. The connectivity gap score of a pixel is high—closer to 1 on a scale of 0–1—when its corresponding triangle is large, when the pixel is close to the centroid of the triangle or when the distance to the vertices is large. A high connectivity gap score represents a greater probability of the pixel location being a gap in existing ex situ collections.
+
+<img src="../Rmarkdown_files/imgs/dela_map.png" alt="connectivity gap score" width="50%" height="60%" style="display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: '50%';" >
+
+
+### **Environmental geo score**
+  
+***
+  
+Environmental gap score  is calculated for each 2.5-arc-minute pixel in the distribution model by conducting a hierarchical clustering analysis using Ward’s method with all the predictor variables from the distribution modelling. The Mahalanobis distance between each pixel and the environmentally closest genebank accession occurrence location was then computed. Environmental distance scores were normalized between 0 and 1. A high environmental gap score value for a pixel reflects a large distance to areas with similar environments where landraces have previously been collected for genebank conservation and, thus, represents a higher probability of the pixel location being a gap in existing ex situ collections.
+
+<img src="../Rmarkdown_files/imgs/environ_map.png" alt="Environmental gap score" width="50%" height="60%" style="display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: '50%';" >
+  
+  
