@@ -1,0 +1,1229 @@
+
+    
+r1 <- raster("C:/Users/acmendez/Google Drive (andres.mendez@correounivalle.edu.co)/CIAT/survey-eldest-version/survey_2.0/www/rasters/all_andean.tif")
+r2 <- raster("C:/Users/acmendez/Downloads/tz850.tiff")
+r2
+r1
+
+leaflet()
+writeRaster(r1 ,"C:/Users/acmendez/Google Drive (andres.mendez@correounivalle.edu.co)/CIAT/survey-eldest-version/survey_2.0/www/rasters/all_andean2.tiff")
+
+require(raster)
+require(rgdal)
+
+
+a <- c("americas", "world")
+g <- c("mesoamerican", "andean")
+c <- "common_bean"
+lvl <- "lvl_1"
+pnt <- c(0.013385342,0.029538882, 0.011444501, 0.018353704)
+thres <- data.frame(matrix(data =  pnt, nrow = 2, ncol = 2, byrow = T))
+filename <- c("gap_score_cost_dist"   ,"gap_score_delaunay")
+radius <- seq(6,100, 1)
+
+rstcr <- list(meso = list(), andean = list())
+  i <- 2
+  for(j in 1:2){
+    
+    rst<- raster("Z:/gap_analysis_landraces/runs/results/common_bean/lvl_1/mesoamerican/americas/gap_models/gap_class_final.tif")
+    
+    rst[which(rst[] != 2 )] <- 0
+     rst[which(rst[] >= thres[i,j])] <- 1
+     rst[which(rst[] != 1 )] <- 0
+    writeRaster(rst, paste0("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/results/common_bean/lvl_1/",g[i],"/americas/gap_models/gap_class",substr(filename[j],10,nchar(filename[j])) ,".tif"), overwrite = T)
+    
+    rr <- is.na(rst)
+    m <- which(rowSums(rr) != ncol(rr))
+    x <- rst[m, ,drop=FALSE]
+    
+    
+    xNA <- is.na(rst)
+    colNotNA <- which(colSums(xNA) != nrow(rst))
+    rowNotNA <- which(rowSums(xNA) != ncol(rst))
+    
+    croppedExtent <- extent(rst, 
+                            r1 = rowNotNA[1], 
+                            r2 = rowNotNA[length(rowNotNA)],
+                            c1 = colNotNA[1], 
+                            c2 = colNotNA[length(colNotNA)])
+    
+    
+    rst.cut <- raster::crop(rst, croppedExtent)
+    
+
+    rstcr[[i]][j]<- rst.cut
+    
+  }
+
+
+
+rstcr <- unlist(rstcr)
+rstbk <- stack(rstcr)
+
+#rst.cut[which(rst.cut[] != 2)] <- NA
+writeRaster(rst.cut, "C:/Users/acmendez/Google Drive/CIAT/survey-eldest-version/survey_2.0/www/rasters/bean/final_bean_mesoamerican.tif" , overwrite = T, band = 2, bandorder = 'BIL', NAflag=-9999)
+
+
+
+rst<- raster(paste0("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/results/common_bean/lvl_1/",g[i],"/americas/gap_models/",filename[j],".tif"))
+
+rst[which(rst[] >= thres[i,j])] <- 1
+rst[which(rst[] != 1 )] <- 0
+writeRaster(rst, paste0("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/results/common_bean/lvl_1/",g[i],"/americas/gap_models/gap_class_cost_dist.tif"))
+
+require(geojsonio)
+occ <- shapefile("Z:/gap_analysis_landraces/runs/input_data/by_crop/common_bean/lvl_1/mesoamerican/americas/occurrences/Occ.shp")
+geojson_write(occ, file = "C:/Users/acmendez/Google Drive/CIAT/survey-eldest-version/survey_2.0/www/rasters/bean/occ_bean_mesoamerican.geojson")
+
+##javascrip function to settle up maps on leaflet 
+
+
+
+
+
+library(FactoMineR)
+library(Factoshiny)
+install.packages("devtools")
+library(devtools)
+install_github("fawda123/ggord")
+library(ggord)
+
+PCA1<-PCA(genepool_data2,quali.sup = 1)
+resshiny_1= PCAshiny(PCA1)
+
+
+
+PCA2<-PCA(genepool_data2[,c(1,4,22,24,25,28)],quali.sup = 1) #bio_7, continentality,accesibility,bio_5,bio_8
+resshiny_2= PCAshiny(PCA2)
+plot(PCA2)
+ord <- PCA(genepool_data2[,c(1,4,22,24,25,28)], graph = FALSE,quali.sup = 1)
+ggord(ord, genepool_data2$Genome_simple_final)
+pcadatos <- dudi.pca(genepool_data2[,c(4,22,24,25,28)],scann=F)
+biplot(pcadatos)
+scatter(pcadatos)
+
+
+
+
+PCA3<-PCA(genepool_data2[,c(1,15,21,24,31,35)],quali.sup = 1) #bio_15, bio_3,bio_7,embergerQ,minTempWarmest
+resshiny_3= PCAshiny(PCA3)
+ord3 <- PCA(genepool_data2[,c(1,15,21,25,31,35)], graph = FALSE,quali.sup = 1)
+ggord(ord3, genepool_data2$Genome_full_final)
+pcadatos <- dudi.pca(genepool_data2[,c(4,22,24,25,28)],scann=F)
+biplot(pcadatos)
+scatter(pcadatos)
+
+
+
+
+bds <- list.files("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/potato/databases/gbif/raw_data/", full.names = TRUE)
+nm <- c("chaucha", "phureja", "stenotomum", "tuberosum")
+
+potato <-  lapply( 1:4, function(x){read.delim(bds[x]) %>% as_tibble() %>% dplyr::mutate(., species2 = nm[x])}) %>% do.call(rbind, . )
+
+potato_db <- potato %>% dplyr::filter(., !is.na(decimallongitude))
+write_csv(potato_db, "//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/potato/databases/gbif/potato_landrace.csv")
+table(potato_db$species2)
+
+shp <- shapefile("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/shapefiles/world_shape_simplified/all_countries_simplified.shp")
+shp <- shp[shp$SUBREGION == 5,]
+
+potato_sp <- SpatialPointsDataFrame(potato_db %>% dplyr::select(., decimallongitude, decimallatitude),
+                       potato_db,
+                       proj4string = crs(shp))
+
+potato_am <- potato_sp[!is.na(over(potato_sp,as(shp,"SpatialPolygons"))),]
+potato_am <- potato_am@data 
+potato_am <- potato_am[!duplicated(potato_am %>% dplyr::select(., decimallongitude, decimallatitude)), ] 
+table(potato_am$species2)
+write_csv(potato_am, "//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/potato/databases/gbif/potato_landrace_americas.csv")
+
+ggplot(potato_am[potato_am$species2 != "tuberosum",]
+) + 
+  aes( decimallongitude, decimallatitude ) + 
+  geom_polygon(data = shp, aes(x = long, y = lat, group = group))+
+  geom_point(aes(color = species2)) 
+
+
+install.packages("gdistance");library(gdistance)
+
+r <- raster("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/auxiliar_rasters/friction_surface.tif") 
+
+r <- raster(nrows=6, ncols=7, xmn=0, xmx=7, ymn=0, ymx=6, crs="+proj=utm +units=m") 
+
+r[] <- c(1, 2, 1, 1, 5, 5, 5, 
+         2, 1, 8, 8, 5, 2, 1, 
+         7, 1, 1, 8, 2, 2, 2, 
+         8, 7, 8, 1, 8, 8, 5, 
+         8, 8, 1, 1, 1, 3, 9, 
+         8, 1, 1, 2, 5, 2, 9) 
+
+t <- transition(r, function(x) 1/mean(x), 8) 
+t <- geoCorrection(t) 
+
+p <- shapefile("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/potato/lvl_1/tuberosum/americas/occurrences/Occ.shp")
+
+c1 <- c(5.5,1.5)
+c2 <- c(1.5,5.5) 
+
+cm  <- matrix(c(5.5, 1.5, 1.5, 5.5),2,2) 
+
+A <- accCost(t, cm) 
+plot(r)
+plot(A) 
+A[]
+sPath2 <- shortestPath(T, c1, c2, output="SpatialLines") 
+lines(sPath2) 
+writeRaster(A, "//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/results/potato/lvl_1/tuberosum/americas/gap_models/cost_dist_inR.tif", overwrite= T)
+
+
+
+
+
+
+pkgs <- c("caret", "deldir", "xlsx", "rmapshaper")
+pkg_new <- setdiff(loadedNamespaces(), pkgs)
+
+length(loadedNamespaces())
+length(pkg_new)
+
+unloadNamespace(pkgs[1])
+length(getLoadedDLLs())
+
+
+shp <- raster::shapefile("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/sorghum/raster/regions.shp")
+mask <- raster("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/mask/mask_world.tif")
+
+msk <- raster::crop(x = mask, extent(shp)) %>% raster::mask(x = ., mask = shp)
+
+writeRaster(msk, "//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/mask/mask_sgh_custom.tif", overwrite = TRUE)
+
+
+crop <- "sorghum"
+occName <- "durra"
+region <- "sgh_custom"
+gap_method <- "/gap_class_cost_dist.tif"
+route <- paste0(baseDir, "/results/", crop, "/lvl_1/", occName, "/", region, "/gap_models")
+
+
+#shp2 <- shapefile("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/sorghum/raster/regions.shp")
+shp <- shapefile("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/shapefiles/world_shape_simplified/all_countries_simplified.shp")
+shp2 <- shp[shp$REGION == 142,]
+
+rast_f <- raster(paste0(route, gap_method ))
+#rast1[which(rast1[] != 0)] <- 1
+rast2 <- raster(paste0(route, "/gap_class_delaunay.tif"))
+#rast2[which(rast2[] != 0)] <- 1
+
+rast_f <- rast1 + rast2
+
+
+afm <- as.data.frame(rast_f, xy = TRUE) 
+afm <- afm[complete.cases(afm), ]
+#afm[which(afm$gap_class_cost_dist != 0 ), 3] <- 1
+head(afm)
+
+colours <- c( "#1f78b4"  , "#b2df8a")
+colours <- c("#a6cee3",  "#1f78b4"  , "#b2df8a")
+
+labs <- c("No gap", "Gap")
+labs <- c("No Gap", "Gap by one","Gap by two")
+xlim <- c(10,100)
+ylim <- c(30, -20)
+Y <-ggplot(data = afm, aes(x = x, y = y, fill = factor(gap_class_cost_dist) )) +
+  scale_fill_manual (values = colours, na.value = "gray", labels = labs  ) + 
+  geom_polygon(data = shp2, aes(x = long, y = lat, group = group), linetype = 1,fill = "gray24" ,color = "black", size = 0.1)+
+  geom_raster() +
+  coord_equal() +
+  theme_dark() +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  guides(fill = guide_legend(title = "Gap_class"))+
+  scale_x_longitude(xmin=xlim[1], xmax = xlim[2], step=20) +
+  scale_y_latitude(ymin = ylim[2], ymax = ylim[1], step=20) +
+  ggtitle("Gap score both cost distance")
+
+Y
+
+ggsave(plot = Y, filename = paste0(route, "/gg_gap_cost_dist.jpg"), width = 8.5, height = 5 )
+
+scale_x_longitude <- function(xmin=-180, xmax=180, step=1, ...) {
+  xbreaks <- seq(xmin,xmax,step)
+  xlabels <- unlist(lapply(xbreaks, function(x) ifelse(x < 0, parse(text=paste0(x,"^o", "*W")), ifelse(x > 0, parse(text=paste0(x,"^o", "*E")),x))))
+  return(scale_x_continuous("Longitude", breaks = xbreaks, labels = xlabels, expand = c(0, 0), ...))
+}
+scale_y_latitude <- function(ymin=-90, ymax=90, step=0.5, ...) {
+  ybreaks <- seq(ymin,ymax,step)
+  ylabels <- unlist(lapply(ybreaks, function(x) ifelse(x < 0, parse(text=paste0(x,"^o", "*S")), ifelse(x > 0, parse(text=paste0(x,"^o", "*N")),x))))
+  return(scale_y_continuous("Latitude", breaks = ybreaks, labels = ylabels, expand = c(0, 0), ...))
+}  
+
+
+sort( sapply(ls(),function(x){object.size(get(x))})) 
+
+
+###############
+###  ACP #####
+###############
+
+
+bd <- read_csv("//dapadfs/Workspace_cluster_9/gap_analysis_landraces/runs/input_data/by_crop/sorghum/lvl_1/classification/sorghum_lvl_1_bd.csv")
+bd <- bd %>% 
+  dplyr::select(., c(67, 10, 16:60)) %>% 
+  dplyr::mutate(., ensemble = as.factor(ensemble)) %>% 
+  na.omit()
+
+pca <- FactoMineR::PCA(bd[, c(-1,-2)], scale.unit = TRUE, ncp = 3)
+
+df <- data.frame(  pca$ind$coord[, c(1,2)], specie = bd$ensemble)
+ plt <- ggplot(data = df, aes(x = Dim.1, y = Dim.2, color = factor(specie))) +
+  geom_point()+
+  xlab(paste("PC_1:", round(pca$eig[1,2],1),  "%") )+
+  ylab(paste("PC_2:", round(pca$eig[2,2],1), "%"))+
+  geom_vline(xintercept = 0)+
+  geom_hline(yintercept = 0)
+ plot(plt)
+  #ggsave(plt, filename = paste0(input_data_dir, "/by_crop/", crop, "/lvl_1/classification/pca_plot.jpg"  ))
+
+  ggplotly(plt, tooltip = c("name"))
+
+##################### SD models validation #############################
+  
+  pca <- FactoMineR::PCA(to_acp[, -ncol(to_acp)], scale.unit = TRUE, ncp = 3)
+  
+  df <- data.frame(  pca$ind$coord[, c(1,2)], method = to_acp$method)
+  plt <- ggplot(data = df, aes(x = Dim.1, y = Dim.2, color = factor(method))) +
+    geom_point()+
+    xlab(paste("PC_1:", round(pca$eig[1,2],1),  "%") )+
+    ylab(paste("PC_2:", round(pca$eig[2,2],1), "%"))+
+    geom_vline(xintercept = 0)+
+    geom_hline(yintercept = 0) + scale_color_hue(labels = c("Old method", "New method")) + guides( colour = guide_legend("Method"))
+  plot(plt)
+  
+  to_acp2 <- scale(to_acp[, -ncol(to_acp)], center = F, scale = T)
+  to_acp2 <-data.frame(to_acp2,   as.numeric(as.character(to_acp$method)))
+  names(to_acp2)[ncol(to_acp2)] <- "method"
+  to_acp2$method <- factor(to_acp2$method)
+  to_acp_melt <- melt(to_acp2, id.vars = 'method')
+  
+  p <- ggplot(to_acp_melt) +
+    geom_boxplot(aes(x = variable, y = value, color = method)) + 
+    scale_color_hue(labels = c("Old method", "New method")) + guides( colour = guide_legend("Method")) 
+  
+  plot(p)
+  
+  
+  to_fit1 <- sdm_res_pesudo1$train$`1`$data
+  to_fit2 <- sdm_res_pesudo2$train$`1`$data
+  #select the same vairables in boht data sets
+  pos <- names(to_fit1) == names(to_fit2)
+  to_fit1 <- to_fit1[ , pos]
+  to_fit2 <- to_fit2[ , pos]
+  
+  set.seed(1234)
+  smpl <- sample(1:56, 14)
+  smpl_from_ps1 <- sample(57:nrow(to_fit1), 70)
+  smpl_from_ps2 <- sample(57:nrow(to_fit2), 70)
+  #create the tes file with the 20% of occurrences and the 70 psedudo-absece of the new method and  also 
+  #70 pseudo absences of the old method
+  to_test <- to_fit1[smpl,  ]
+  to_test <- rbind(to_test, to_fit1[smpl_from_ps1, ], to_fit2[smpl_from_ps2, ])
+  
+  #remove the rows tha we have selected before form the train files
+  to_fit1 <- to_fit1[- c(smpl, smpl_from_ps1 ), ]
+  to_fit2 <- to_fit2[- c(smpl, smpl_from_ps2), ]
+  
+  #fit two models using the entire data set
+  #model with new pseudo absences
+  data_train <- to_fit1 
+  
+  #adding all presence points to background
+  pres_to_bg <- data_train[which(data_train[, 1] == 1), ]
+  pres_to_bg[,1] <- rep(0, length(pres_to_bg [, 1]))
+  
+  p <- c(data_train[, 1], pres_to_bg[,1])#adding all presence points to background
+  data <- rbind(data_train[, -c(1,2,3)], pres_to_bg[, -c(1,2,3)])#adding all presence points to background
+  
+  fit.maxent1 <- maxnet::maxnet(p       = p,
+                               data    = data,
+                               regmult = beta,
+                               f       = maxnet.formula(p, data, classes = paste0(substr(feat, start = 1, stop = 1), collapse = "")))
+
+  #model with old pseudo absences
+  
+  data_train2 <- to_fit2 
+  
+  #adding all presence points to background
+  pres_to_bg2 <- data_train2[which(data_train2[, 1] == 1), ]
+  pres_to_bg2[,1] <- rep(0, length(pres_to_bg2[, 1]))
+  
+  p2 <- c(data_train2[, 1], pres_to_bg2[,1])#adding all presence points to background
+  data2 <- rbind(data_train2[, -c(1,2,3)], pres_to_bg2[, -c(1,2,3)])#adding all presence points to background
+  
+  fit.maxent2 <- maxnet::maxnet(p       = p2,
+                               data    = data2,
+                               regmult = beta,
+                               f       = maxnet.formula(p2, data, classes = paste0(substr(feat, start = 1, stop = 1), collapse = "")))
+  
+  predictions1 <- raster::predict(object = fit.maxent1, newdata = data_train[ , -1], type = "cloglog")
+  predictions1 <- data.frame(obs = data_train[ , 1], pred = predictions1 )
+  
+  predictions2 <- raster::predict(object = fit.maxent2, newdata = data_train2[ , -1], type = "cloglog")
+  predictions2 <- data.frame(obs = data_train2[ , 1], pred = predictions2 )
+  
+  
+  croc1 <-  pROC::roc(response = predictions1$obs, predictor = predictions1$pred)
+  croc2 <-  pROC::roc(response = predictions2$obs, predictor = predictions2$pred)
+  
+  croc_summ1 <- data.frame (sensi = croc1$sensitivities, speci = croc1$specificities, threshold =  croc1$thresholds) %>% 
+    round(., 3) %>% 
+    dplyr::mutate(., max.TSS = sensi + speci - 1) %>% 
+    dplyr::mutate(., minROCdist = sqrt((1- sensi)^2 + (speci -1)^2))
+  
+  croc_summ2 <- data.frame (sensi = croc2$sensitivities, speci = croc2$specificities, threshold =  croc2$thresholds) %>% 
+    round(., 3) %>% 
+    dplyr::mutate(., max.TSS = sensi + speci - 1) %>% 
+    dplyr::mutate(., minROCdist = sqrt((1- sensi)^2 + (speci -1)^2))
+  
+  thr1 <- croc_summ1[which.max(croc_summ1$max.TSS), 3]
+  thr2 <- croc_summ2[which.max(croc_summ2$max.TSS), 3]
+  
+  
+  ## comparision of the two models
+  pred1 <- raster::predict(object = fit.maxent1, newdata = to_test[, -1], type = "cloglog")
+  dt1 <- data.frame(obs = factor(to_test[, 1]), pred = pred1)
+  
+  pred2 <- raster::predict(object = fit.maxent2, newdata = to_test[, -1], type = "cloglog")
+  dt2 <- data.frame(obs = factor(to_test[, 1]), pred = pred2)
+  
+  
+  roc1 <-  pROC::roc(response = dt1$obs, predictor = dt1$pred)
+  roc2 <-  pROC::roc(response = dt2$obs, predictor = dt2$pred)
+  
+  
+  roc1$auc
+  roc2$auc
+  
+  a1 <- dt1 %>% dplyr::filter(., pred >= thr1 & obs == 1) %>% nrow()
+  b1 <- dt1 %>% dplyr::filter(., pred >= thr1 & obs == 0) %>% nrow()
+  c1 <- dt1 %>% dplyr::filter(., pred < thr1 & obs == 1) %>% nrow()
+  d1 <- dt1 %>% dplyr::filter(., pred < thr1 & obs == 0) %>% nrow()
+  
+  
+  a2 <- dt2 %>% dplyr::filter(., pred >= thr2 & obs == 1) %>% nrow()
+  b2 <- dt2 %>% dplyr::filter(., pred >= thr2 & obs == 0) %>% nrow()
+  c2 <- dt2 %>% dplyr::filter(., pred < thr2 & obs == 1) %>% nrow()
+  d2 <- dt2 %>% dplyr::filter(., pred < thr2 & obs == 0) %>% nrow()
+  
+  se1 <- a1/(a1+c1)
+  es1 <- d1/(b1+d1)
+  #Matthews correlation coefficient
+  den1 <- sqrt((a1+b1)*(a1+c1)*(d1+b1)*(d1+c1))
+  den1 <- ifelse(den1  != 0 ,den1, 1 )
+  mcc1 <- (a1*d1 - b1*c1)/den1
+  #Likelyhood Ratio +
+  lr_ps1 <- se1/(1 - es1)
+  #Likelihood ratio -
+  lr_ne1 <- (1 - se1)/es1
+  
+  pr_a1 <- (a1+d1)/(a1+b1+c1+d1)
+  pr_e1 <- (((a1+b1)/(a1+b1+c1+d1))* ((a1+c1)/(a1+b1+c1+d1) ) ) + ( ((c1+d1)/(a1+b1+c1+d1)) * ((b1+d1)/(a1+b1+c1+d1)) ) 
+  kappa1 <- (pr_a1 - pr_e1)/(1 - pr_e1) 
+  
+  evaluation1 <- data.frame(pseudo_abs_method = "New method", threshold= thr1, sensi = se1, speci = es1, matthews.cor = mcc1, LR_pos = lr_ps1, LR_neg = lr_ne1, kappa = kappa1, AUC =roc1$auc)
+  
+  se2 <- a2/(a2+c2)
+  es2 <- d2/(b2+d2)
+  #Matthews correlation coefficient
+  den2 <- sqrt((a2+b2)*(a2+c2)*(d2+b2)*(d2+c2))
+  den2 <- ifelse(den2  != 0 ,den2, 2 )
+  mcc2 <- (a2*d2 - b2*c2)/den2
+  #Likelyhood Ratio +
+  lr_ps2 <- se2/(1 - es2)
+  #Likelihood ratio -
+  lr_ne2 <- (1 - se2)/es2
+  
+  pr_a2 <- (a2+d2)/(a2+b2+c2+d2)
+  pr_e2 <- (((a2+b2)/(a2+b2+c2+d2))* ((a2+c2)/(a2+b2+c2+d2) ) ) + ( ((c2+d2)/(a2+b2+c2+d2)) * ((b2+d2)/(a2+b2+c2+d2)) ) 
+  kappa2 <- (pr_a2 - pr_e2)/(1 - pr_e2) 
+            
+  evaluation2 <- data.frame(pseudo_abs_method = "Old method", threshold= thr2, sensi = se2, speci = es2, matthews.cor = mcc2, LR_pos = lr_ps2, LR_neg = lr_ne2, kappa = kappa2, AUC = roc2$auc)
+            
+  evaluation1
+  evaluation2
+  
+  roc_res <- list(roc_pseudo_new = roc1, roc_pseudo_old = roc2)
+  
+  saveRDS(roc_res, "C:/Users/acmendez/Google Drive/CIAT/presentations/pseudo_abs_comparision/roc_results.rds")
+  #####################
+
+
+  data(canada.cities, package = "maps")
+  viz <- ggplot(canada.cities, aes(long, lat)) +
+    borders(regions = "canada") +
+    coord_equal() +
+    geom_point(aes(text = name, size = pop), colour = "red", alpha = 1/2)
+
+  ggplotly(Y)
+  
+  
+p_load(rmarkdown, knitr, kableExtra)
+
+#### set a progress bar using =
+pb <- txtProgressBar( style = 3)
+cat("Calculatind distances in process pls wait... \n")
+for(x in 1:10000){
+  setTxtProgressBar(pb, x/10000)
+  Sys.sleep(0.1)
+}
+close(pb)
+
+
+
+##### using future package to parallelize
+require(future)
+require(tidyverse)
+
+iris_folds <- modelr::crossv_kfold(iris, k = 5)
+
+model <- Species ~ Sepal.Length
+
+plan(multisession)
+
+lms <- iris_folds %>%
+  mutate(
+    mod = map(.x = train, .f = values(future({function(.x){ lm(model, data = .x) }}))   )
+  )
+
+future:::ClusterRegistry("stop")
+
+lms$mod[[2]]
+
+lm(Species ~ Sepal.Length, data = iris)
+
+
+availableCores()
+
+
+##############################
+
+
+andean_r <- raster("Z:/gap_analysis_landraces/runs/results/common_bean/lvl_1/andean/americas/gap_models/gap_class_final.tif")
+
+daniel_shp <- shapefile("Z:/gap_analysis_landraces/runs/surveys/survey_danieldebouck_Commonbean/survey_danielDebouck_cleaned/bean_andean_gaps/bean_andean_danielDebouck.shp")
+
+gaps <- daniel_shp[which(grepl("[(]gap", daniel_shp@data$comments)  ), ]
+
+no_gaps <- daniel_shp[c(7, which(grepl("[(]no ", daniel_shp@data$comments)  )), ]
+
+
+################ ejercicios con tcl/tk para simple interfaz grafica en R #######
+require(tcltk)
+win1 <<- tktoplevel()
+tktitle(win1) <- "Set col number"
+col_nm <<- tclVar("")
+win1$env$entName <<- tkentry(win1, width = "25", textvariable = col_nm)
+tkgrid(tklabel(win1, text = "Please enter the column number of target variable:", justify = "left"), padx = 10, pady = c(15, 5), sticky = "w")
+tkgrid(win1$env$entName, padx = 10, pady = c(0, 15))
+
+onOk <<- function(){
+  col_number <- tclvalue(col_nm)
+  tkdestroy(win1)
+  msg <- paste("Column number selected ", col_number, "as Y variable.")
+  tkmessageBox(message = msg)
+}
+
+win1$env$butOK <<- tkbutton(win1, text = "OK", width = -6, command = onOk)
+tkgrid(win1$env$butOK, padx = 10, pady = c(5, 15))
+tkbind(win1$env$entName, "<Return>", onOk)
+tkfocus(win1)
+
+
+col_number <<- as.integer(tclvalue(col_nm)) 
+
+
+
+##############
+cat("Preview Data base /n")
+print(head(df))
+
+#in case of col_number empty request a value from the user
+if(is.null(col_number)){
+  warning("please enter the column number of response variable", immediate. = TRUE, noBreaks. = T)
+  col_number <- readline(prompt="Enter an integer: ") 
+}
+#check if the number enter by de user has the correct format(only a number)
+if(!grepl("^[0-9]+$", col_number)){
+  warning("Only numbers are allowed", immediate. = TRUE, noBreaks. = T)
+  col_number <- readline(prompt="Enter an integer: ")
+}
+
+#select only the response vraiable and lat / long
+df <- df %>% dplyr::select(., as.integer(col_number), 
+                           matches("declat|latitude", ignore.case = T), 
+                           matches("declon|longitude", ignore.case = T) ) 
+if(ncol(df) > 3){
+  stop("Data base has more than 1 lat/long variable")
+}
+
+if(ncol(df) <= 2){
+  stop("Data base doesn't have one of lat/long varaible")
+}
+#change names
+names(df) <- c("Y", "Latitude", "Longitude")
+
+cat("Cleaning zero lat/lon /n")
+
+
+################## future
+
+plan(multiprocess)
+future_lapply(1:5, function(i){
+  
+  set.seed(seedList[i])
+  #probList <- raster::extract(x = kernel_upt, y = occ[,c("lon", "lat")])
+  
+  g <- gc(); rm(g)
+  
+  #probList[is.na(probList)] <- 0
+  pnt <- base::sample(x = 1:nrow(points_to_sample), size = 1, replace = F)
+  
+  if(!file.exists(paste0(gap_valDir, "/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/buffer_radius_to_omit_shp.shp"))){
+    cat("Point has not been created, processing ... \n")
+    cat(">>> Create a buffer around the point", i, "... \n")
+    radius <- create_buffers(xy        = points_to_sample[pnt, c("lon", "lat")],
+                                        msk       = mask,
+                                        buff_dist = buffer_radius,
+                                        format    = "GTiff",
+                                        filename  = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points"))
+    
+    cat(">>> Identify and exclude of the analysis points within the buffer radius ... \n")
+    id_pnts <- raster::extract(x = radius, y = occ[,c("lon", "lat")])
+    pnt_excl <- occ[which(id_pnts == 1),]
+    write.csv(x = pnt_excl,
+              file = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/coordinates_to_exclude.csv"),
+              row.names = F)
+    spData_upt <- occ[base::setdiff(1:nrow(occ), which(id_pnts == 1)),]; rm(id_pnts)
+    write.csv(x = spData_upt,
+              file = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/occ_", occName, ".csv"),
+              row.names = F)
+    
+    spData_upt2 <- spData_upt[,c("lon", "lat")]
+    names(spData_upt2) <- c("Longitude", "Latitude")
+    spData_upt2$ensemble <- occName
+    write.csv(x = spData_upt2,
+              file = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/", crop, "_", level, "_bd.csv"),
+              row.names = F)
+    rm(spData_upt2)
+  } else {
+    radius <- raster::raster(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/buffer_radius_to_omit.tif"))
+    cat("Point has been created, loading data ... \n")
+    pnt_excl <- read.csv(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/coordinates_to_exclude.csv"))
+    spData_upt <- read.csv(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/occ_", occName, ".csv"))
+  }
+  
+  cat(">>> Creating occurrences shapefile... \n")
+  
+  create_occ_shp(file_path   = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points", "/", crop, "_lvl_1_bd.csv"),
+                            file_output = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points","/Occ.shp"),
+                            validation  = TRUE)
+  
+  cat(">>> Creating cost distance raster ... \n")
+  cost_dist_function(
+    outDir       = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models"),
+    friction     = friction,
+    mask         = mask,
+    occDir       = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points"),
+    arcgis       = use.Arcgis,
+    code         = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points/cost_dist.py")
+  )
+  
+  cat(">>> Load same variables for SDM ... \n")
+  vars <- read.csv(paste0(sp_Dir, "/sdm_variables_selected.csv"))
+  vars <- as.character(vars$x)
+  
+  cat(">>> Load calibrated feature parameters for SDM ... \n")
+  calibration <- read.csv(paste0(sp_Dir, "/calibration.csv"))
+  feat <- CreateMXArgs(calibration)
+  beta <- feat[(grepl("betamultiplier=", feat))]; beta <- as.numeric(gsub("betamultiplier=", "", beta))
+  feat <- feat[(!grepl("betamultiplier=", feat))]
+  rm(calibration)
+  
+  occSDM <- read.csv(paste0(sp_Dir_input, "/swd/swd_", occName, ".csv"))
+  occSDM <- occSDM[,3:ncol(occSDM)]
+  names(occSDM)[1] <- occName
+  id_sdm   <- raster::extract(x = radius, y = occSDM[occSDM[,1] == 1, c("lon", "lat")])
+  sdm_excl <- occSDM[which(id_sdm == 1),]
+  occSDM_upt <- occSDM[base::setdiff(1:nrow(occSDM), which(id_sdm == 1)),]; rm(id_sdm, sdm_excl)
+  
+  clim_vars <-  paste0(var_names, ".tif")  %in% list.files(climDir) 
+  generic_vars <- paste0(var_names, ".tif") %in% list.files(clim_spReg)
+  clim_layer <- lapply(paste0(climDir, "/", var_names[clim_vars], ".tif"), raster)
+  generic_layer <- lapply(paste0(clim_spReg,"/", var_names[generic_vars],".tif"), raster)
+  clim_layer <- raster::stack(c(clim_layer, generic_layer))
+  
+  if(use.maxnet){
+    
+    cat("Running sdm modelling approach using Maxnet \n")
+    cat("      This process can take several minutes...... Be patient \n \n ")
+    if(!file.exists(paste0(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models/",occName,"_prj_median.tif")))){
+      sdm_maxnet_approach_function(occName      = occName,
+                                              spData       = occSDM_upt,
+                                              var_names    = vars,
+                                              model_outDir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models"),
+                                              sp_Dir       = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models"),
+                                              clim_layer   = clim_layer,
+                                              nFolds       = 5,
+                                              beta         = beta,
+                                              feat         = feat,
+                                              doSDraster   = FALSE,
+                                              varImp       = FALSE,
+                                              validation   = FALSE)
+      
+    }
+    
+  }else{
+    
+    cat(">>> Running maxent model approach, evaluate and project ...\n")
+    m2 <- sdm_approach_function(occName = occName,
+                                           spData = occSDM_upt,
+                                           model_outDir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results"),
+                                           var_names = vars,
+                                           nCores = 5,
+                                           nFolds = 5,
+                                           beta = beta,
+                                           feat = feat)
+    
+    m2_eval <- evaluation_function(m2,
+                                              eval_sp_Dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/evaluation"),
+                                              spData = occSDM_upt)
+    model_outDir_rep <- paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models/replicates")
+    
+    if(!file.exists(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models/", occName, "_prj_median.tif"))){
+      
+      # clim_table <- raster::as.data.frame(clim_layer, xy = T)
+      # clim_table <- clim_table[complete.cases(clim_table),]
+      # model <- .GlobalEnv$projecting_function(m2,
+      #                                         m2_eval,
+      #                                         clim_table,
+      #                                         mask,
+      #                                         model_outDir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models"),
+      #                                         nCores = 5,
+      #                                         obj.size = 3,
+      #                                         s.dev = FALSE)
+      # rm(clim_table); g <- gc(); rm(g)
+      # 
+      # 
+      
+      svPth <- paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models")
+      
+      models <- lapply(X = 1:5, FUN = function(i){
+        cat("Projectin model", i, " to a raster object \n")
+        p <- raster::predict(m2@models[[1]]$maxent[[i]]@object, clim_layer, type = "cloglog", progress='text')
+        p_tst <- p
+        p_tst[p_tst[] <= m2_eval$threshold[i]] <- NA
+        writeRaster(p, paste0(svPth, "/replicates/", occName, "_prj_rep-", i, ".tif"))
+        writeRaster(p_tst, paste0(svPth, "/replicates/", occName, "_prj_th_rep-", i, ".tif"))
+        
+      })
+      
+      prj_stk <- raster::stack(models)
+      
+      cat("Calculating mean, median and sd for replicates \n")
+      mean(prj_stk, na.rm = TRUE) %>% writeRaster(., paste0(svPth,"/", occName, "_prj_mean.tif" ), overwrite = TRUE)
+      cat("Mean raster calculated \n")
+      raster::calc(prj_stk, fun = function(x) {median(x, na.rm = T)}) %>% writeRaster(., paste0(svPth,"/", occName, "_prj_median.tif" ), overwrite = TRUE)
+      cat("Median raster calculated \n")
+      raster::calc(prj_stk, fun = function(x) {sd(x, na.rm = T)}) %>% writeRaster(., paste0(svPth,"/", occName, "_prj_std.tif" ), overwrite = TRUE)
+      cat("Sd raster calculated \n")
+      
+    } else {
+      cat("SDM model has already been created ... \n")
+    }
+    
+    
+    
+  }
+  
+  
+  if(!file.exists(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/kernel.tif"))){
+    cat(">>> Creating a new kernel density ...\n")
+    kernel <- raster_kernel(mask = mask,
+                                       occurrences = spData_upt, # spData_upt[spData_upt[,1] == 1,],
+                                       out_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models"),
+                                       kernel_method = 2,
+                                       scale = T)
+  } else {
+    cat("Kernel raster has already been created ... \n")
+  }
+  
+  if(!file.exists(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/env_score_hclust_mahalanobis.tif"))){
+    cat(">>> Creating a new environmental distance ...\n")
+    calc_env_score(lv_name = occName,
+                              clus_method = "hclust_mahalanobis",
+                              sdm_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results"),
+                              gap_dir = gap_outDir,
+                              occ_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/01_selected_points"),
+                              env_dir = climDir,
+                              out_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models"),
+                              var_names = var_names)
+  } else {
+    cat("Environmental score has already been created ... \n")
+  }
+  
+  if(!file.exists(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/delaunay.tif"))){
+    cat(">>> Creating a new Delanuay triangulation ...\n")
+    calc_delaunay_score(baseDir    = baseDir,
+                        area       = region,
+                        group      = occName,
+                        crop       = crop,
+                        lvl        = level,
+                        ncores     = NULL,
+                        validation = TRUE,
+                        pnt        = paste0("pnt", i),
+                        dens.level = "high_density")
+  } else {
+    cat("Delanuay triangulation score has already been created ... \n")
+  }
+  
+  lapply(geo_score, function(x){
+    
+    if(!file.exists(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/gap_score_", x, ".tif"))){
+      cat(">>> Calculating gap indicator ...\n")
+      calc_gap_score(lv_name = occName,
+                                clus_method = "hclust_mahalanobis",
+                                gap_method = x, # Can be: "cost_dist", "kernel", "delaunay"
+                                sdm_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/02_sdm_results/prj_models"),
+                                gap_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models"),
+                                out_dir = paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models"))
+      gap_score <- raster(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/gap_score_", x, ".tif"))
+    } else {
+      gap_score <- raster(paste0(gap_valDir, "/buffer_100km/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/gap_score_", x, ".tif"))
+    }
+    
+    
+  })
+  
+  # cat(">>> Calculating percentage of correctly classified occurrences ...\n")
+  # library(tidyverse)
+  # gap_values <- raster::extract(x = gap_score, y = pnt_excl[,c("lon", "lat")])
+  # percentile <- seq(from = 0, to = 1, by = 0.001)
+  # metrics <- tibble(Coordinates = list(pnt_excl[,c("lon","lat")]),
+  #                   Gap_score = list(gap_values),
+  #                   CC_points = unlist(purrr::map(.x = percentile, .f = function(z){sum(gap_values[complete.cases(gap_values)] > z)})),
+  #                   PCC_points = unlist(purrr::map(.x = percentile, .f = function(z){sum(gap_values[complete.cases(gap_values)] > z)/length(gap_values[complete.cases(gap_values)])})),
+  #                   Percentile = percentile)
+  # saveRDS(metrics, paste0(gap_valDir, "/", densities[density_pattern], "_density/pnt", i, "/03_gap_models/validation_metrics.RDS"))
+  # 
+  # return(cat("Done!\n"))
+  
+}, future.packages = devtools::loaded_packages()$package)
+future:::ClusterRegistry("stop")
+
+
+
+############ archivos ASC #####################
+
+require(SDMTools)
+gp_tx <- read.asc("D:/OneDrive - CGIAR/Attachments/Desktop/gap_taxa/gap-taxa-rich2015-08-04nondups.asc")
+
+writeRaster(gp_txt, "D:/OneDrive - CGIAR/Attachments/Desktop/gap_taxa/gap-taxa-rich2015-08-04nondups.tif")
+
+gp_txt <- raster("D:/OneDrive - CGIAR/Attachments/Desktop/gap_taxa/gap-taxa-rich2015-08-04nondups.asc")
+
+plot(gp_txt)
+
+
+shp <- shapefile("Z:/gap_analysis_landraces/runs/input_data/shapefiles/GAUL_2014/G2014_2013_0_NO_ANT.shp")
+
+averages <-  lapply(1:nrow(shp@data), function(k){
+  cat("processing:", shp[k,]$ADM0_NAME, "of", k, "/" nrow(shp@data), "\n")
+me <- shp[k,] %>% raster::extract(gp_txt, . ) %>% unlist()%>% mean(., na.rm = T)
+
+return(data.frame(country = shp[k,]$ADM0_NAME, average = me))
+})
+
+
+
+shp@data %>% nrow()
+shp[1,]$ADM0_NAME
+
+
+###  remover todas las pesuedo-ausencias que caen dentro de china
+
+shp <- shapefile("Z:/gap_analysis_landraces/runs/input_data/shapefiles/world_shape_simplified/all_countries_simplified.shp")
+
+china_shp <-  shp[shp@data$NAME == "China",]
+
+#shapefile("D:/OneDrive - CGIAR/Attachments/Desktop/worthless_files/china_editted.shp")
+
+
+
+dpData <- read.csv("Z:/gap_analysis_landraces/runs/input_data/by_crop/rice_asia/lvl_1/indica/rice_custom/swd/swd_indica.csv")%>%
+  dplyr::mutate(id = 1:nrow(.))
+
+dpData$over <-  dpData  %>% dplyr::select(lon, lat) %>% 
+  SpatialPoints(., proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0") ) %>% 
+  sp::over(., china_shp) %>% dplyr::select(LON) %>% dplyr::mutate( LON =replace(LON, !is.na(LON), 1) ) %>% pull(LON) 
+
+
+#removiendo el 95% de las pseudo_abs dentro del area
+to_remove <- dpData  %>%
+  dplyr::filter( status == 0 & over == 1) %>%
+  dplyr::slice(sample(1:nrow(.), nrow(.)*0.95, replace =F )) %>%
+  dplyr::pull(id)
+
+dpData <- dpData[-which(dpData$id %in% to_remove),]
+
+
+
+# remover todo lo que caiga dentro del area
+
+dpData <- dpData[-which(dpData$status == 0  & dpData$over == 1), ]
+
+plot(dpData$lon, dpData$lat)
+write.csv(dpData,"Z:/gap_analysis_landraces/runs/input_data/by_crop/rice_asia/lvl_1/indica/rice_custom/swd/swd_indica.csv", row.names = F)
+
+dpData$over <- NULL
+dpData <- dpData[, 3:ncol(dpData)]
+
+#################### nueva forma de calcular los gap scores
+
+
+sdm_prj <- raster("Z:/gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/prj_models/indica_prj_median.tif")
+
+dela <- raster("Z:/gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/gap_models/delaunay.tif")
+env <- raster("Z:/gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/gap_models/env_score_hclust_mahalanobis.tif")
+cost <- raster("Z:/gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/gap_models/cost_dist.tif")
+
+dela_new <- sdm_prj * dela
+env_new  <- sdm_prj * env
+cost_new <- sdm_prj * cost
+
+writeRaster(env_new, "Z:/gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/gap_models/gap_score_environmental.tif")
+writeRaster(cost_new, "Z:/gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/gap_models/gap_score_cost_dist_new.tif")
+writeRaster(dela_new, "Z:gap_analysis_landraces/runs/results/rice_asia/lvl_1/indica/rice_custom/gap_models/gap_score_delaunay_new.tif")
+
+
+
+####### GEOCODER ###########
+pacman::p_load(tidyverse, rtweet,httr, jsonlite, geojson, geojsonlint, httpuv, stringr, rvest, RSelenium, 
+               udpipe,quanteda, lubridate, bit64, stringdist, magrittr, wordcloud, lattice )
+
+pkey <- "9291d82367mshfa5bfd9bbe7c50ap1ce87djsnc441dfa7e680"
+
+phost <- "opencage-geocoder.p.rapidapi.com"
+op_cg_key <- "01eb252d647a448fa19d3fcaef9762bc"
+
+#path parameter
+
+ppath <- "/lang/es" 
+
+query <- "leticia, amazonas, colombia"
+country_iso_2 <- "co" 
+
+
+#creando el http
+endpoint <- paste0("https://", phost,"/geocode/v1/json?")
+request <- paste0(endpoint,  
+                  "language=en&key=", op_cg_key, 
+                  "&q=", query, 
+                  "&roadinfo=0",
+                  "&countrycode=", country_iso_2)
+
+http <- URLencode(request)
+
+
+#ejecutamos el request usando el metodo GET
+
+response <- GET(http, 
+                add_headers("X-RapidAPI-Host" = phost,
+                            "X-RapidAPI-Key" = pkey))
+
+text <- content(response, as = "text", encoding = "UTF-8")
+
+#efectuando el parsing del formato JSON usando jsonlite
+coords <- fromJSON(text, flatten =T , simplifyMatrix = T)
+
+results <- coords$results 
+
+coords$results$bounds
+coords$results$confidence
+
+
+################################ removing pseudo-absences in INDIA
+require(raster)
+require(tidyverse)
+
+ind_shp <- shapefile("Z:/gap_analysis_landraces/runs/input_data/shapefiles/IND_adm/IND_adm1.shp")
+
+ind_red <- ind_shp[ind_shp@data$NAME_1 %in% c("Bihar", "Haryana", "Madhya Pradesh", "Maharashtra", "Punjab", "Tamil Nadu", "Uttar Pradesh"),]
+
+
+swd_file <- read.csv("Z:/gap_analysis_landraces/runs/input_data/by_crop/chickpea/lvl_1/kabuli/chickpea_custom/swd/swd_kabuli.csv")
+head(swd_file)
+
+
+fall <- raster::extract(ind_red, swd_file[, c("lon", "lat")]) %>% dplyr::pull(NAME_1)
+
+sdw_file_ind <- data.frame(swd_file, IND = fall)
+
+#removeing pseudo-absences
+
+sdw_file_ind <- sdw_file_ind[-which(sdw_file_ind$status == 0 & !is.na(sdw_file_ind$IND) ),]
+
+
+plot(ind_shp)
+
+sdw_file_ind %>% filter(status == 0, !is.na(IND)) %>% dplyr::select(lon, lat) %>%plot()
+
+sdw_file_ind %>% filter(status == 1, !is.na(IND)) %>% dplyr::select(lon, lat) %>% points(col = 'red', pch = 16)
+
+sdw_file_ind %>% 
+  dplyr::select(lon, lat) %>% points()
+
+sdw_file_ind %>% 
+  dplyr::filter(status == 1) %>% 
+  dplyr::select(lon, lat) %>% points(col = "red", pch = 16)
+
+#### no RUN
+write.csv(sdw_file_ind, "Z:/gap_analysis_landraces/runs/input_data/by_crop/chickpea/lvl_1/kabuli/chickpea_custom/swd/swd_kabuli.csv", row.names = F)
+
+############# fuzzy logic
+
+require(fastcluster)
+dg <- read_excel("seed_weigth.xlsx", sheet = 1)
+
+hist(pull(dg))
+
+
+
+m_dist <- matrix(nrow=nrow(dg), ncol=nrow(dg))
+x <- pull(dg)
+# calculate similarity matrix from one single vector using euclidean distances (x-y)^2 
+# dirty way (using nested for)
+for(j in 1:nrow(dg)){
+  for(i in 1:nrow(dg)){
+    if(i == j){
+      m_dist[j, i] <- 0
+    }else{
+      m_dist[j, i] <- (x[j] - x[i])^2
+    }
+  }
+}
+
+
+dst_m <-  as.dist(m_dist)
+
+fit1 <- cmdscale(dst_m,eig=TRUE, k=2) # k is the number of dim
+fit1 # view results
+
+# plot solution
+x <- fit1$points[,1]
+y <- fit1$points[,2]
+
+
+fit2 <- isoMDS(dst_m, k=2) # k is the number of dim
+fit2 # view results
+
+# plot solution
+x <- fit2$points[,1]
+y <- fit2$points[,2]
+plot(x, y, xlab="Coordinate 1", ylab="Coordinate 2",
+     main="MDS", type="p")
+
+
+data.frame(x,y, memb) %>% ggplot2::ggplot(aes(x =x , y =y , colour = factor(memb))) + geom_point()
+
+
+
+clust_hc <- fastcluster::hclust(dst_m, method = "ward.D") 
+plot(clust_hc)
+memb <- cutree(clust_hc, k= 2)
+
+cls <- data.frame( dg, clust= memb ) %>% dplyr::mutate(clust = ifelse(clust == 1, "big", "small"))
+
+cls %>%  ggplot(aes( y = hsw, colour = factor(clust))) +
+  geom_boxplot() +
+  geom_hline(aes(yintercept = max(cls[cls$clust == "small", 1])),color="blue", linetype="dashed", size=1)
+
+cp <- 4.42
+cls %>% ggplot(aes(x = hsw, factor  = clust, color = clust, fill = clust)) + 
+  geom_density(alpha=0.4)+
+  geom_vline(aes(xintercept= cp),
+             color="blue", linetype="dashed", size=1)+
+  labs(title = "Dist method, thr = 4.42") 
+
+
+cls %>% filter(clust == "small") %>% pull(hsw) %>% hist()
+
+cls %>% filter(clust == "big") %>% pull(hsw) %>% hist()
+
+m
+thr <- unique(pull(dg))
+require(pROC)
+
+
+# 1 va a ser peque?o
+for(i in thr){
+  
+ bd <- dg %>% dplyr::mutate(class = ifelse(hsw <= i, 1, 0)) 
+ 
+ 
+  
+}
+
+install.packages("BAMMtools")
+library(BAMMtools)
+
+install.packages("overlapping")
+library(overlapping)
+
+thr_jk <- getJenksBreaks(pull(dg), k = 3, subset = NULL)[2]
+
+thr_jk
+
+jenk <- dg %>% dplyr::mutate(thr_jenk = ifelse(hsw <= thr_jk, "small", "big"))
+
+jenk %>%  ggplot(aes(x = hsw, factor  = thr_jenk, color = thr_jenk, fill = thr_jenk)) + 
+  geom_density(alpha=0.4)
+
+ovp <- overlapping::overlap(list(small = jenk %>% filter(thr_jenk == "small") %>% pull(hsw), big = jenk %>% filter(thr_jenk == "big") %>% pull(hsw)), plot=TRUE)
+ovp$OV
+ovp$DD
+thr <- unlist(ovp$xpoints)
+
+jenk %>%  ggplot(aes(x = hsw, factor  = thr_jenk, color = thr_jenk, fill = thr_jenk)) + 
+  geom_density(alpha=0.4)+
+  geom_vline(aes(xintercept= thr),
+             color="blue", linetype="dashed", size=1)+
+  geom_vline(aes(xintercept= 2.3),
+             color="red", linetype="dashed", size=1)
+  labs(title = paste("Jenkins method, thr = ", round(thr))) 
+
+
+
+dist(pull(dg), method = "euclidean")
+
+
+####################
+
+data <- read.csv("D:/OneDrive - CGIAR/Documents/lentil_estambul/lentil_lvl1_bd_with_cluster.csv", stringsAsFactors = F)
+
+
+
+#dentro del cluster peque?o
+to_train <- data %>%
+  dplyr::mutate(clust = ifelse(hsw <= 3.9, "small", "big"),
+                ensemble = ifelse(ensemble == 1, "amarillo", "rojo")) 
+
+clas_res_size <- to_train%>%
+  dplyr::select(clust, Accessibility:Yield) %>% 
+  classification_fun(df = .,
+                     standardize_all = F,
+                     sampling_mthd = "down",
+                     omit_correlated = T,
+                     top_variables = 5,
+                     external_df = NULL)
+
+p1 <- data.frame(to_train, clas_res_size$PCA$ind$coord[, 1:2]) %>% 
+  mutate(cluster = factor(cluster)) %>%
+  ggplot(aes(x = Dim.1, y = Dim.2))+
+  geom_point(aes(shape = ensemble, colour = ensemble))+
+  stat_ellipse(geom="polygon", aes(fill = cluster), alpha = 0.2, show.legend = FALSE, level = 0.95)+
+  labs(title = "Both clusters") 
+
+
+to_train %>% dplyr::select(cluster, Altitude) %>% 
+  ggplot(aes(y = Altitude, colour = factor(cluster)))+
+  geom_boxplot()
+
+clas_res_size$Testing_CM
+clas_res_size$Testing_MCC
+
+leaflet() %>% 
+  setView(lat= 0, lng = 0, zoom = 1) %>% 
+  addTiles(options = providerTileOptions(noWrap = TRUE) )%>% 
+  addCircles(data = to_train %>% dplyr::select(Latitude, Longitude, clust), 
+             radius =  ~rep(20000, nrow(to_train)),
+             color = ~pal(clust), 
+             stroke = F, 
+             fillOpacity = 0.8,
+             label = ~as.character(clust)) %>%
+  addLegend(data = to_train, 
+            position = "bottomright", 
+            colors = ~pal(unique(clust)), 
+            labels = ~factor(unique(clust)),
+            title = "Class names",
+            opacity = 0.8)
+
+
+
+
+
+
+##### dentro del cluster grande
+to_train2 <-  data %>%
+  dplyr::mutate(clust = ifelse(hsw <= 4.42, "small", "big"),
+                ensemble = ifelse(ensemble == 1, "amarillo", "rojo")) %>% 
+  dplyr::filter(cluster == 1)  
+
+ clas_res_size_and_clust_big <-  to_train2 %>%
+  dplyr::select(clust, Accessibility:Yield) %>%
+  classification_fun(df = .,
+                     standardize_all = F,
+                     sampling_mthd = "down",
+                     omit_correlated = T,
+                     top_variables = 5,
+                     external_df = NULL)
+
+ 
+ p2 <- data.frame(to_train2, clas_res_size_and_clust_big$PCA$ind$coord[, 1:2]) %>% 
+   mutate(cluster = factor(cluster)) %>%
+   ggplot(aes(x = Dim.1, y = Dim.2))+
+   geom_point(aes(shape = ensemble, colour = ensemble))+
+   labs(title = "Big clusters(Europe)") 
+ 
+clas_res_size_and_clust_big$Testing_CM
+clas_res_size_and_clust_big$Testing_MCC
+
+
+clas_res_size_and_clust_big$Testing_CM$ensemble$table%>% as.data.frame.table %>%datatable()
+
+gridExtra::grid.arrange(p1, p2, nrow =1)
+
+
+pal <- colorFactor(palette = "Set1", domain = unique(to_train2$clust))
+
+leaflet() %>% 
+  setView(lat= 0, lng = 0, zoom = 1) %>% 
+  addTiles(options = providerTileOptions(noWrap = TRUE) )%>% 
+  addCircles(data = to_train2 %>% dplyr::select(Latitude, Longitude, clust), 
+             radius =  ~rep(20000, nrow(to_train2)),
+             color = ~pal(clust), 
+             stroke = F, 
+             fillOpacity = 0.8,
+             label = ~as.character(clust)) %>%
+  addLegend(data = to_train2, 
+            position = "bottomright", 
+            colors = ~pal(unique(clust)), 
+            labels = ~factor(unique(clust)),
+            title = "Class names",
+            opacity = 0.8)
+  
+
+
+x <- as.table(rbind(c(54,	136),
+               c(52,	131)))
+
+x <- round(x , 0)
+dimnames(x) <- list( genero = c("M", "F"),
+               estado = c("No controlado", "controlado" ))
+
+pt <- chisq.test(x)
+pt$observed
+pt$expected
+
+
+
+##################################3

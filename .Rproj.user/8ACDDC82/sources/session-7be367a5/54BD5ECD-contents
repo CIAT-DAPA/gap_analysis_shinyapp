@@ -1,0 +1,18 @@
+---
+  title: "valida_description"
+output: html_document
+---
+  
+  ### **Mapping ex situ conservation gaps**
+  
+  ***
+  
+  Spatial ex situ conservation gaps were calculated from the conservation gap scores using a cross-validation procedure to derive a threshold for each landrace group and each of the gap scores (accessibility gap score, Connectivity gap score, Environmental gap score). To do so, we created synthetic (artificial) gaps by removing genebank occurrences in five randomly chosen circular areas of 100 km radius within the Landrace Distribution Model. We then tested whether these synthetic gaps could be predicted by our method and determined the threshold value of each gap score that would maximize the prediction of these synthetic gaps. Performance for each of the five synthetically created gaps was assessed using the AUC, sensitivity and specificity. Finally, the average threshold value of each gap score, maximizing the prediction of the synthetic gaps (balanced with minimizing false positives), was used to discretize the gap score datasets into areas with a high priority for further collecting (areas with gap score above the threshold, assigned a value of 1) as opposed to relatively well-conserved areas (areas with gap score below the threshold, assigned a value of 0).
+
+<img src="../Rmarkdown_files/imgs/validation_flow.png" alt="Environmental gap score" width="50%" height="60%" style="display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: '50%';" >
+  
+  
+  

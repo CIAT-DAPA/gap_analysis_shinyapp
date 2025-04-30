@@ -1,0 +1,26 @@
+{
+    "id": "F510D9A9",
+    "path": "C:/Users/acmendez/Downloads/test_resampling2.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1682430059806.0,
+    "source_on_save": false,
+    "relative_order": 15,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "611,26",
+        "scrollLine": "0"
+    },
+    "folds": "26|38|38|0|\n51|34|60|16|\n63|35|72|16|\n75|49|94|25|\n106|38|118|21|\n132|71|181|18|\n200|49|222|21|\n229|66|268|0|\n271|39|294|0|\n459|57|551|0|\n",
+    "lastKnownWriteTime": 1682441633,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1682441634011,
+    "read_only": false,
+    "read_only_alternatives": []
+}

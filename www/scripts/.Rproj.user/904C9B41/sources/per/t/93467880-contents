@@ -1,0 +1,36 @@
+#ANDRES CAMILO MENDEZ
+#SCRIPT TO CROP ALL GENERIC AND SPECIFIC RASTERS
+
+
+crop_raster <- function(mask, global_data, out_path){
+  
+  
+  mask <- raster(mask)
+  #crop rasters from by_crop folders
+  global_dirs <- list.dirs(global_data, recursive = FALSE)
+  out_names <- list.dirs(global_data, recursive = FALSE, full.names = FALSE)
+  
+  out_dirs <- list.dirs(out_path, recursive = F)
+  
+  
+  for(i in 1:length(global_dirs)){
+    cat("Cropping raster: " , global_dirs[i], "\n")
+    tryCatch({
+      pths <- list.files(global_dirs[i], pattern = ".tif$" ,full.names = TRUE)
+      if(length(pths) == 0){safeError("Error, no raster file detected.")}
+     x <- raster::stack(pths) %>% 
+        raster::crop(., extent(mask)) %>% 
+        raster::stack(.)
+  
+        for(r in 1:nlayers(x)){
+          x[[r]] %>%
+            writeRaster(., paste0(out_path, "/", out_names[i], "/", names(.), ".tif"), overwrite = T)
+        }
+     log_init <- "ok"
+    },error =  function(e){
+               log_init <- "error"
+             })
+    
+  }
+ return(log_init)
+}#end function

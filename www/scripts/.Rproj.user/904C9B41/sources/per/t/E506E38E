@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1579275363792.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1699736449",
+    "id" : "E506E38E",
+    "lastKnownWriteTime" : 1564155617,
+    "last_content_update" : 1564155617,
+    "path" : "D:/Gap_analysis_UI/www/scripts/02_sdm_modeling/calibration_function.R",
+    "project_path" : "02_sdm_modeling/calibration_function.R",
+    "properties" : {
+        "cursorPosition" : "45,16",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 18,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

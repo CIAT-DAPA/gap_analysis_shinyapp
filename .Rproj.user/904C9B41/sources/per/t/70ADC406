@@ -1,0 +1,26 @@
+{
+    "id": "70ADC406",
+    "path": "D:/gap_analysis_shinyapps/www/scripts/03_gap_methods/delaunay_geo_score.R",
+    "project_path": "www/scripts/03_gap_methods/delaunay_geo_score.R",
+    "type": "r_source",
+    "hash": "4183465455",
+    "contents": "",
+    "dirty": true,
+    "created": 1669685399632.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "119,6",
+        "scrollLine": "110"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1665937501,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1670417259247,
+    "read_only": false,
+    "read_only_alternatives": []
+}

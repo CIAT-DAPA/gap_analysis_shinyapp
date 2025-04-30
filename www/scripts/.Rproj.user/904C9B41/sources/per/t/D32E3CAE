@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1567113167354.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2082645174",
+    "id" : "D32E3CAE",
+    "lastKnownWriteTime" : 1571664220,
+    "last_content_update" : 1571664220847,
+    "path" : "C:/Users/acmendez/Google Drive/R_SCRIPTS/taller_shiny.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "307,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 13,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

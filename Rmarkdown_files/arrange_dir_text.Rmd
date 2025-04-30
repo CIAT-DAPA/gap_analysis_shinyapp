@@ -1,0 +1,15 @@
+---
+title: "Arrange dir system"
+output: html_document
+---
+
+### **Working directory set up**
+ *The wizard will guide you through the process to set up working directories for the Gap analysis.*
+ ***
+
+Landrace Gap Analysis App is an R-shiny application developed in R software version 4.2.2. This app uses local resources for processing, it will save and load file locally as it needs. To start the process user must select a folder where all inputs, intermediate-inputs and outputs will be stored.
+
+1. Write the Crop name in the Crop name field.
+2. Click the button **"Browse"** for the root folder in which the App directory system will be created.
+3. Finally, click on **"Select"**  button, this will create all necessary folder to store inputs, results, etc...
+

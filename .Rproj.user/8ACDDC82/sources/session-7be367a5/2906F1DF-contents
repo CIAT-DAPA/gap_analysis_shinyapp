@@ -1,0 +1,82 @@
+require(tidyverse)
+#clq4I!DPSakvASLl0e5U
+
+
+#' bind cols varios vectores con diferente numero de elementos
+#'@param lst list with variables names vectors
+cbind.na <-function(lst){
+  
+  mxlgth <- max(sapply(lst, length))
+  
+  fill.na <- lapply(lst, function(i){
+    to_fill <- mxlgth-length(i)
+    c(i, rep(NA, to_fill))
+  })
+  
+  to_ret <- do.call(cbind, fill.na)
+  #names(to_ret) <- names()      
+return(to_ret)
+  }
+
+fls <- list.files("Z:/1.Data/Palmira/CSO/data", pattern = "climate_reg_cluster_values_extracted.csv", recursive = T, full.names = T)#"\KEN\_results\cluster_results\climate\climate_reg_cluster_values_extracted.csv"
+fls <- fls[!grepl("old", fls)]
+
+ls_nms <- lapply(fls, function(i){
+  nms <- readLines(i, n=1)
+  to_ret <- unlist(strsplit(nms, split = ','))
+  to_ret <- to_ret[!grepl("clust", to_ret)]
+  return(to_ret)
+  
+})
+
+names(ls_nms)<- sapply(fls, substring, first = 28, last = 30)
+
+cbind.na(ls_nms)
+
+unique(unlist(ls_nms))
+
+
+
+fls_json <- list.files("Z:/1.Data/Palmira/CSO/data", pattern = "clim_conflict_ips_overlays.xlsx$", recursive = T, full.names = T)#"\KEN\_results\cluster_results\climate\climate_reg_cluster_values_extracted.csv"
+fls_json <- fls_json[!grepl("old", fls_json)]
+
+dic <- readxl::read_excel("Z:/1.Data/Palmira/CSO/used_variables_data_dictionary_plus_geojson.xlsx")
+
+lst <- lapply(fls_json, function(path){
+  iso <- stringr::str_extract(path, "data/[A-Z]{3}")
+  iso <- base::gsub("data/", "", iso)
+  
+  geo_fl <- names(readxl::read_excel(path))
+  
+  code_clim <- gsub("climvar_", "",geo_fl[grepl("^climvar", geo_fl)] )
+  
+  code_ip <- gsub("^([A-Z][a-z ]+_)", "",geo_fl[grepl("^[A-Z][a-z]+", geo_fl)] )
+  code_ip <- stringr::str_extract(code_ip, "[a-zA-Z0-9_ ]+_thr")
+  code_ip <- gsub("_thr$", "", code_ip)
+  
+  to_ret <- data.frame(iso = iso, var_names = geo_fl)
+  to_ret$code_var <- rep(NA, nrow(to_ret))
+  to_ret$category_var <-  rep(NA, nrow(to_ret))
+  
+  to_ret$code_var[grepl("^climvar", to_ret$var_names) ] <- code_clim
+  to_ret$code_var[grepl("^[A-Z][a-z]+", to_ret$var_names)] <- code_ip
+  
+  to_ret$category_var[grepl("^climvar", to_ret$var_names) ] <- "climate"
+  to_ret$category_var[grepl("^[A-Z][a-z]+", to_ret$var_names)] <- "Socio-economic"
+  
+  dic_2 <- dic[!is.na(dic$Code),]
+  
+  dic_2$Code <- gsub("\\{iso\\}", iso, dic_2$Code)
+  
+  
+  to_ret <- dplyr::left_join(to_ret,dic_2, by = c("code_var" = "Code") )
+  
+  return(to_ret)
+  })
+
+
+df_x<- do.call(rbind, lst)
+
+
+writexl::write_xlsx(df_x, "D:/OneDrive - CGIAR/Documents/metadata_file.xlsx")
+

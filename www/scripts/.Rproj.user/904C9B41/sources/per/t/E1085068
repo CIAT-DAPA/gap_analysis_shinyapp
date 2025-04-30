@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1566317999271.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "767897003",
+    "id" : "E1085068",
+    "lastKnownWriteTime" : 1561646646,
+    "last_content_update" : 1561646646,
+    "path" : "D:/Gap_analysis_UI/www/scripts/00_config/config_crop.R",
+    "project_path" : "00_config/config_crop.R",
+    "properties" : {
+        "cursorPosition" : "1,42",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 7,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

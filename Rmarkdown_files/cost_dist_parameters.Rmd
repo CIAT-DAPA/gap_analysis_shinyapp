@@ -1,0 +1,16 @@
+---
+title: "cost_dist_parameters"
+output: html_document
+---
+
+### **Parameters Especification**
+
+***
+
+1. __Select Occurrence data:__ choose from your computer a valid CSV file with the passport data, latitude, longitude, and class/race information.
+                                                        This file is created by the **Database creator assistant** from the assistant menu and you can find it in the next file path.
+                                                        results/"crop\_name"/"regiona\_name"/"race\_name"/cleaned\_data/"crop\_name"\_lvl\_1\_bd.csv
+
+2. __Select Friction surface raster:__ It is a raster file whose values represents the time spent to walk through one pixel of 5 km squared, taking  into account the terrain type if it has roads or if it has a slope or if it is a forest, jungle, etc. 
+**File path:** ../global\_data/auxiliar\_raster/friction\_surface.tif
+

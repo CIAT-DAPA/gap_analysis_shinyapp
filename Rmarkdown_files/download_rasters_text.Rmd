@@ -1,0 +1,27 @@
+---
+title: "comp1"
+output: html_document
+---
+
+### **Import external/auxiliary data**
+
+*This wizard allows you to import external raster files relevant for the gap analysis*
+
+***
+
+Gridded data comes from different sources encompassing different perspectives, it has to be in a 2.5 arc-min spatial or 5km resolution, below are specified the source for each data:
+
+* __Climate approach:__ We have use 19 bioclimatic variables at 2.5 arc-min spatial resolution from [WoldClim]("http://www.worldclim.org"). Raster files for an additional 16 climate variables were also used at the same spatial resolution from the Environmental Rasters for Ecological Modeling [ENVIREM]( "https://envirem.github.io") database. 
+* __Topography:__ To characterize topography, we used elevation above sea level from the Shuttle Radar Topography Mission [SRTM]("http://srtm.csi.cgiar.org"), dataset of the CGIAR-Consortium on Geospatial Information (CSI) portal.
+                    Climate and Topography data will be downloaded in the path  **.../input\_data/generic\_rasters/world/**
+* __anthropogenic and/r socio-economic:__ namely, crop yield, total harvested area, total crop production, percentage of area under irrigation, population accessibility, distance to rivers, and distance to ancient human settlements.
+
+	+ Crop yield, harvested area and crop production data were gathered from the, [MapSPAM]("http://mapspam.info/about/") , 2005 database.
+	+ Percentage of area under irrigation from the, [FAO]("http://www.fao.org/land-water/outreach/graphs-and-maps/details/en/c/237286/"), Global Map of Irrigation Areas.
+	+ Population accessibility from the Global Map of Accessibility published by the, [Joint Research Center]("https://forobs.jrc.ec.europa.eu/products/gam/").
+	+ Distance to rivers map was created by computing the distance from each pixel (in a 2.5 arc-min grid) to the closest river.
+	+ Geographic distance to the primary genepool wild relatives was created by computing the distance between every pixel (in a 2.5 arc-min grid) to the closest known observation of any wild relative 
+	 within the primary genepool.
+
+All datasets will be downloaded in the path **.../global\_data/**, After all main inputs are stored in their respective folder, you will be able to crop each input according to  the raster mask already created.
+

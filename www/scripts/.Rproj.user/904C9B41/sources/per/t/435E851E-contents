@@ -1,0 +1,336 @@
+###################################
+# @autor: Andres camilo mendez
+# This script comes with absolutely no warranty, feel free to use it 
+#in the PPA brasil framework
+
+
+if(!require(pacman)){install.packages("pacman");library(pacman)}else{library(pacman)}
+pacman::p_load(tidyverse, rtweet,httr, jsonlite, geojson, geojsonlint, httpuv, stringr, rvest, RSelenium, 
+               udpipe,quanteda, lubridate, bit64, stringdist, magrittr, wordcloud, lattice )
+
+
+
+#################################################################
+##### Download News from internet due some key words ############
+#################################################################
+
+
+
+
+endpoint <- "http://webhose.io/filterWebContent"
+
+apikey.webhose <- "6d6262fd-8d0c-4d3a-8272-98939d4b9577" # api key de brayan
+
+format.v <- "json" 
+
+#timestamp
+now <- Sys.time()
+
+#luego le le quito 30 dias
+monthago <- now - days(30)
+
+ts.v <- as.integer64(as.numeric(monthago)*1000, digits=15)
+
+only.post <- "true"
+
+q.v <- "ipam OR \"ipam amazônia\" OR \"parceiros pela amazônia\""
+q.v <- URLencode(q.v) %>% paste0(.,"%20is_first%3Atrue" )
+
+sort.v <- "relevancy"
+
+#volvemos a crear el http
+http <- paste0(endpoint, "?q=", q.v, "&token=", apikey.webhose, "&format=", 
+               format.v, "&ts=", ts.v, "&sort=", sort.v, "&from=0")
+
+
+#volvemos a hacer el request 
+response <- GET(http, 
+                add_headers("Accept" = "text/plain"))
+
+articles.text <- content(response, as = "text", encoding = "UTF-8")
+articles.flt <- fromJSON(articles.text, flatten = T)
+
+
+articles.flt.df <- articles.flt[["posts"]]
+articles.flt.tr <- articles.flt[["totalResults"]]
+articles.flt.mra <- articles.flt[["moreResultsAvailable"]]
+articles.flt.next <- articles.flt[["next"]]
+
+#next es un parametro del body que recurre muchas veces en apis con paginacion
+#a veces nos proporciona el codigo de la pagina siguiente
+#en este caso nos da directamente el http para el request de la siguiente pagina
+
+#articles.flt.dt <- as.data.table(articles.flt.df)
+
+#inicializo el parametro de salida
+
+### si se necesita descargar mas archivos
+
+if(articles.flt.mra > 0){
+  
+  nout <- 100
+  i <- 1
+  while(nout == 100){
+    
+    http <- paste0("http://webhose.io", articles.flt.next)
+    
+    response <- tryCatch({
+      GET(http, 
+              add_headers("Accept" = "text/plain"))
+     
+    }, error = function(e){
+      message(paste("Seems to be an error:", e, "\n"))
+      return(NA)
+    })
+    
+    articles.text.tmp <- content(response, as = "text", encoding = "UTF-8")
+    articles.flt.tmp <- jsonlite::fromJSON(articles.text.tmp, flatten = T)
+    
+    articles.flt.dt.tmp <- articles.flt.tmp[["posts"]]
+    articles.flt.next <- articles.flt.tmp[["next"]]
+    nout <- nrow(articles.flt.dt.tmp)
+    
+    l <- list(articles.flt.df, articles.flt.dt.tmp)
+    articles.flt.df <- do.call("rbind", l)
+    
+    articles.flt.mra <- articles.flt.tmp[["moreResultsAvailable"]]
+    hd <- headers(response)
+    apicall <- hd[["x-webhose-requests-left"]]
+    msg <- paste0("Articulos restantes: ", articles.flt.mra, " - Requests restantes: ", apicall)
+    print(msg)
+    i <- i+1
+    tm <- ifelse(i %% 5 == 0, 5, 8)
+    Sys.sleep(tm)
+  }
+  
+}
+
+saveRDS(articles.flt.df, "Y:/PPA-SNA/input_data/news_crawled/Neg?cio de impacto/impact_business_brazil_2019-08-16.rds")
+
+
+
+ news.flt.dt <- articles.flt.df %>% 
+  dplyr::mutate(., text.pr = tolower(text))%>% 
+  dplyr::mutate(., text.pr = gsub( "( |^)\\| [a-z]+", "" , text.pr)) %>%
+  dplyr::filter(., (thread.site_type == "news" | thread.site_type == "blogs"))
+
+#### detectar textos que sean muy parecidos
+
+
+  news.flt.dt %<>%
+    group_by(thread.site_full) %>%
+    dplyr::mutate(., repeated = table(thread.site_full)  ) %>% 
+    dplyr::ungroup() %>%
+    dplyr::mutate(., str_sim = 0, ID = 1:nrow(.)) %>%
+      data.frame()
+  #saveRDS(news.flt.dt, paste0("D:/OneDrive - CGIAR/Desktop/ppa_brasil/input_data/news_crawled/", "Conserva??o_da_biodiversidade_", Sys.Date()) )
+  
+  news.flt.dt <- readRDS("D:/OneDrive - CGIAR/Desktop/ppa_brasil/input_data/news_crawled/Conserva??o_da_biodiversidade/impact_business_brazil_2019-07-05.rds")
+
+  ### eliminar entradas que sean de la misma url y tengan mucha similaridad entre si
+  news.flt.dt %>%
+    dplyr::filter(., repeated > 1) %>%
+    dplyr::pull(thread.site_full)%>%
+    unique() %>% for(i in .){
+      cat("Removing news duplicated by site:", i, "/", length(.), "\n")
+      to_check <- news.flt.dt[which(news.flt.dt$repeated > 1 & news.flt.dt$thread.site_full == i), ] 
+        
+      comb <- combn(nrow(to_check), 2)
+      j <- 1
+    while(j != 0){
+      cat("    Calculating similarity measures for:", j, "/", ncol(comb), " possible duplicated news. \n" )
+      x <- stringsim(a = to_check[comb[1, j],  "text.pr"] , b = to_check[comb[2, j] , "text.pr"], method = "osa")
+      names(x) <- NULL
+      
+      if(x >= 0.9){
+        
+        news.flt.dt <<- news.flt.dt[-which(news.flt.dt$repeated > 1 & news.flt.dt$thread.site_full == i)[comb[2, j] ], ]
+        comb <- comb[, -which(comb[1, ] == comb[2, j]) ]
+        
+      }
+      
+      #Establecer criterio de parada
+      if(j == ncol(comb) | ncol(comb) == 0){
+        j<- 0
+      }else{
+        j <- j +1
+      }
+     
+      }
+    }
+  
+   
+  
+  ## 3) ahora creo el CORPUS 
+  mycorpus <- corpus(news.flt.dt$text.pr)
+  
+  ## 4) a) TOKENIZATION (separar las palabras)
+  mycorpus_url_numb_punct_symb <- tokens(mycorpus, what = "word", remove_url = T, remove_numbers = T,
+                                         remove_punct = T, remove_symbols = T, remove_separators = T, 
+                                         remove_twitter = T, remove_hyphens = T)
+  
+  
+  ## 4)STOPWORDS
+  ## vamos removiendo las stopwords
+  # estas son las stopwords basicas del portuges
+  stopwords.es <- stopwords(language = "en")
+  stopwords.es
+  
+  # podemos anadir otras stopwords ad hoc
+  # 1) palabras relacionadas con el tema investigado
+  # por ejemplo podemos quitar la palabra clave de la busqueda de los articulos
+  stopwords.add <- c( "conservation", "biodiversity",  "brazil", 
+                      "one", "two", "much", "view", "united states", "scopus",
+                      "schoolar", "google", "Conserva??o", "biodiversidade", "brasil")
+  
+  stopwords.tot <- c(stopwords.es, stopwords.add)
+  mycorpus_sw <- tokens_remove(mycorpus_url_numb_punct_symb, stopwords.tot) 
+  
+  ##### CREACION DE LA DOCUMENT TERM MATRIX
+  #aqui ya podemos crear la document term matrix
+  dtm_sw <- dfm(mycorpus_sw, tolower = T)
+  View(dtm_sw[c(1:34), c(1:50)])
+  
+  ## 5) STEMMING
+  # encuentro las raices de las palabras
+  mycorpus_stem<-tokens_wordstem(mycorpus_sw, language = "en")
+  mycorpus[10]
+  mycorpus_sw[10]
+  mycorpus_stem[10]
+  
+  dtm_stem <- dfm(mycorpus_stem)
+  dtm_stem
+  ##### no STEMMING
+  
+  dtm_stem <-dtm_sw
+  
+  ##6) para disminuir la complejidad podemos quitar los stems de unos o dos caracteres 
+  dtm_w2<-dfm_select(dtm_stem, min_nchar = 3)
+  dtm_w2
+  
+  ##remuevo stems no frecuentes, en este caso que aparezcan en menos de 10 titulos 
+  #y por lo menos en en cinco titulos distintos
+  dtm_f10<-dfm_trim(dtm_w2, min_termfreq = 8, min_docfreq = 5)
+  dtm_f10
+  
+  dtm_sw <- dtm_f10
+  ## exploramos la document term matrix
+  #las palabras mas frecuentes
+  topfeatures(dtm_sw, 10)  
+  ## similarity
+  # es algo parecido a una correlacion calculada sobre palabras
+  # que tanto quedan asociadas las palabras entre ellas?
+  # tomo las diez palabras mas frecuentes
+  tf <- topfeatures(dtm_sw, 10)
+  
+  freqfeatures <- names(tf)
+  freqfeatures
+  # individuo posibles palabras vacias extras dentro de las frecuentes
+  stopfeatures <- c("to", "of" , "the", "can", "also", "one")
+  # las quito de listado de las palabras frecuentes
+  freqfeatures <- freqfeatures[!freqfeatures %in% stopfeatures]
+  
+  #calculo la matriz de correlaciones entre las palabras mas frecuentes y todas las demas palabras 
+  sim <- textstat_simil(dtm_sw, selection = freqfeatures, margin = "features", 
+                        method = "correlation")
+  
+  
+  library(GGally)
+  
+  ggcorr(data = NULL, cor_matrix = sim[freqfeatures, ], nbreaks=10, palette='RdBu', label=TRUE, label_size=4, 
+         label_color='black', label_round = 2)
+  
+  library(RColorBrewer)
+  
+  textplot_wordcloud(dtm_sw, min_count = 15, random_order = FALSE,
+                     rotation = .25, min_size =1, max_size = 5, max_words = 39,
+                     color = RColorBrewer::brewer.pal(8,"Dark2"))
+  
+  
+  mycorpus_ngram <- tokens_ngrams(mycorpus_sw, n = c(1:3), concatenator = " ")
+  mycorpus_ngram[2]
+  
+  dtm_ngram <- dfm(mycorpus_ngram)  
+  mycorpus_stem<-tokens_wordstem(mycorpus_ngram, language = "en")
+  dtm_stem <- dfm(mycorpus_stem)
+  dtm_stem
+  
+  
+  dtm_w2<-dfm_select(dtm_stem, min_nchar = 3)
+  dtm_w2
+  
+  
+  ##remuevo stems no frecuentes, en este caso que aparezcan en menos de 10 titulos 
+  #y por lo menos en en cinco titulos distintos
+  dtm_f10<-dfm_trim(dtm_w2, min_termfreq = 15, min_docfreq = 5)
+  dtm_f10
+  
+  ##7) ahora removemos los articulos que no tienen informacion
+  # calculamos el numero de palabras por cada titulo
+  rowTotals <- apply(X = dtm_f10, MARGIN = 1, FUN = sum) 
+  #eliminamos todos los tweets que no tengan stems en las columnas
+  dtm_delrow <- dtm_f10[rowTotals> 0, ]
+  dtm_w2 <- dtm_delrow
+  
+  topfeatures(dtm_w2, 10)
+  
+  textplot_wordcloud(dtm_w2, min_count = 15, random_order = FALSE,
+                     rotation = .25, min_size =1, max_size = 5, max_words = 37,
+                     color = RColorBrewer::brewer.pal(8,"Dark2"))
+  
+  library(udpipe)   
+  ## First step: Take the Spanish udpipe model and annotate the text. 
+  ## Note: this takes about 3 minutes   
+  ud_model <- udpipe_download_model(language = "english-ewt")  
+  ud_model <- udpipe_load_model(ud_model$file_model)   
+  
+  
+  x <- udpipe_annotate(ud_model, x = news.flt.dt$text.pr) %>% 
+    as.data.frame()
+  
+  sustantivos <- x[x$upos == "NOUN",]
+  stats <- txt_freq(x = sustantivos$lemma)
+  
+  
+  #Co ocurrencia. que tan  frecuentemente las palabras ocurren en la misma sentencia, 
+  #en este caso sustantivos y adjetivos
+  sustantivosadjetivos <- x[x$upos == "NOUN" | x$upos == "ADJ",]
+  stats <- cooccurrence(sustantivosadjetivos,    
+                        term = "lemma", 
+                        group = c("doc_id", "paragraph_id", "sentence_id"))  
+  
+  stats %>% 
+    mutate(key = paste(term1, term2), key = factor(key))%>% arrange(desc(cooc)) %>% head(., 20) %>% 
+    barchart(key ~ cooc, data =., col = "cadetblue", main = "Keywords - simple noun phrases", xlab = "Frequency")
+  
+  #
+  
+  x <- x[-which(x$token %in% c("","\"",stopwords.es, stopwords.add)),] 
+  x <- d
+  
+  ## Using a sequence of POS tags (noun phrases / verb phrases)
+  x$phrase_tag <- as_phrasemachine(x$upos, type = "upos")
+  stats <- keywords_phrases(x = x$phrase_tag, term = tolower(x$token), 
+                            pattern = "(N|AD)*N(P+D*(N|AD)*A)*", 
+                            is_regex = TRUE, detailed = FALSE,
+                            ngram_max = 3)
+  stats <- subset(stats, ngram == 3 & freq > 100 | stats$keyword == "bolsonaro")
+  stats$key <- factor(stats$keyword, levels = rev(stats$keyword))
+  barchart(key ~ freq, data = head(stats, 20), col = "cadetblue", 
+           main = "Keywords - Barchart", xlab = "Frequency")
+  
+  
+  
+  wordcloud(words = stats$keyword, freq = stats$freq, scale=c(2,0),
+            max.words = 30, colors = RColorBrewer::brewer.pal(18,"Dark2"), random.color= TRUE)
+  
+  ymd_hms(news.flt.dt$thread.published) %>% 
+    date() %>% 
+    table() %>%
+    as.data.frame()%>% 
+    rename(., day = .) %>%
+    #write.csv(., "D:/OneDrive - CGIAR/Desktop/text_mining_results/serie_tiempo2.csv")
+  ggplot(.,  aes(x = day, y = Freq, group = 1)) + geom_line() + geom_point()
+  
+
+  

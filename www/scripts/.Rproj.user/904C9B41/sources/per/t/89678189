@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1567176581238.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3301018490",
+    "id" : "89678189",
+    "lastKnownWriteTime" : 1567180957,
+    "last_content_update" : 1567180957506,
+    "path" : "Y:/PPA-SNA/scripts/redes_scripts.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "20,7",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 14,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

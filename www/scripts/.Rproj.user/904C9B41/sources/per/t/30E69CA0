@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1572260978982.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3112225429",
+    "id" : "30E69CA0",
+    "lastKnownWriteTime" : 1571145794,
+    "last_content_update" : 1571145794,
+    "path" : "C:/Users/acmendez/Google Drive/R_SCRIPTS/cosas_por_ahi.R",
+    "project_path" : null,
+    "properties" : {
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 17,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

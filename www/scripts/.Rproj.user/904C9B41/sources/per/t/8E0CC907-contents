@@ -1,0 +1,80 @@
+
+# Source functions
+cat("Loading R scripts\n")
+source(paste0(srcDir, "/01_classification/classification_function.R"))
+source(paste0(srcDir, "/01_classification/crop_raster.R"))
+source(paste0(srcDir, "/01_classification/create_occ_shp.R"))
+source(paste0(srcDir, "/01_classification/prepare_input_data.R"))
+source(paste0(srcDir, "/02_sdm_modeling/background_points.R"))
+#source(paste0(srcDir, "/02_sdm_modeling/model_driver.R"))
+source(paste0(srcDir, "/02_sdm_modeling/null_model.R"))
+source(paste0(srcDir, "/02_sdm_modeling/calibration_function.R"))
+source(paste0(srcDir, "/02_sdm_modeling/tuning_maxNet.R"))
+#source(paste0(srcDir, "/02_sdm_modeling/evaluation_function.R"))
+#source(paste0(srcDir, "/02_sdm_modeling/sdm_approach_function.R"))
+source(paste0(srcDir, "/02_sdm_modeling/sdm_maxnet_approach_function.R"))
+#source(paste0(srcDir, "/02_sdm_modeling/do_projections.R"))
+#source(paste0(srcDir, "/02_sdm_modeling/projecting_function.R"))
+#source(paste0(srcDir, "/02_sdm_modeling/miscellanous/kernel_indicator.R")) --- removed
+source(paste0(srcDir, "/03_gap_methods/create_buffers.R"))
+source(paste0(srcDir, "/03_gap_methods/kernel_function.R"))
+source(paste0(srcDir, "/03_gap_methods/cost_distance_function.R"))
+source(paste0(srcDir, "/03_gap_methods/ecogeo_cluster.R"))
+source(paste0(srcDir, "/03_gap_methods/env_distance.R"))
+source(paste0(srcDir, "/03_gap_methods/combine_score.R"))
+source(paste0(srcDir, "/03_gap_methods/delaunay.R"))
+source(paste0(srcDir, "/03_gap_methods/delaunay_geo_score.R"))
+source(paste0(srcDir, "/03_gap_methods/gaps_validation.R"))
+source(paste0(srcDir, "/03_gap_methods/summary_function.R"))
+source(paste0(srcDir, "/03_gap_methods/validation_function.R"))
+source(paste0(srcDir, "/03_gap_methods/create_png_maps.R"))
+
+# Working directories
+cat("Creating working directories...\n")
+#new input data dir
+global_data_dir<- paste0(baseDir, "/global_data")
+worldDir       <- paste0(global_data_dir, "/environmental_rasters");if(!file.exists(worldDir)){dir.create(worldDir, recursive = TRUE)}
+mapspamDir     <- paste0(global_data_dir, "/MapSpam_rasters");if(!file.exists(mapspamDir)){dir.create(mapspamDir, recursive = TRUE)}
+aux_dir        <- paste0(global_data_dir, "/auxiliar_rasters");if(!file.exists(aux_dir)){dir.create(aux_dir, recursive = TRUE)}
+res_dir        <- paste0(baseDir, "/results/", crop)
+#new results dir
+
+results_dir    <- paste0(baseDir, "/results/", crop, "/", region) 
+input_data_dir <- paste0(results_dir, "/input_data");if(!file.exists(input_data_dir)){dir.create(input_data_dir, recursive = TRUE)}
+input_auxDir   <- paste0(input_data_dir, "/auxiliar_rasters");if(!file.exists(input_auxDir)){dir.create(input_auxDir, recursive = TRUE)}
+input_mapspamDir<- paste0(input_data_dir, "/MapSpam_rasters");if(!file.exists(input_mapspamDir)){dir.create(input_mapspamDir, recursive = TRUE)}
+climDir         <- paste0(input_data_dir, "/environmental_rasters");if(!file.exists(climDir)){dir.create(climDir, recursive = TRUE)}
+data_dir        <- paste0(input_data_dir, "/cleaned_data");if(!file.exists(data_dir)){dir.create(data_dir, recursive = TRUE)}
+### new dirs per race
+sp_results      <- paste0(results_dir, "/", occName)
+gap_outDir      <- paste0(sp_results, "/gap_scores");if(!file.exists(gap_outDir)){dir.create(gap_outDir, recursive = TRUE)}
+sdm_outDir      <- paste0(sp_results, "species_distribution");if(!file.exists(sdm_outDir)){dir.create(sdm_outDir, recursive = TRUE)}
+pesudoDir       <- paste0(sdm_outDir, "/pseudo_absences");if(!file.exists(pesudoDir)){dir.create(pesudoDir, recursive = TRUE)}
+replicatesDir   <- paste0(sdm_outDir, "/maxent_replicates");if(!file.exists(replicatesDir)){dir.create(replicatesDir, recursive = TRUE)}
+
+resourcesDir    <- paste0(gap_outDir, "/resources");if(!file.exists(resourcesDir)){dir.create(resourcesDir, recursive = TRUE)}
+occDir          <- paste0(sp_results, "/occurrences");if(!file.exists(occDir)){dir.create(occDir, recursive = TRUE)}
+gap_valDir      <- paste0(sp_results, "/gap_validation");if(!file.exists(gap_valDir)){dir.create(gap_valDir, recursive = TRUE)}
+
+#paths to specific files
+friction  <- paste0(input_auxDir, "/friction_surface.tif")
+mask_path       <- paste0(input_data_dir, "/mask_", region, ".tif")
+
+
+# cat("Loading dirs for validation process")
+# 
+# if(!file.exists(paste0(gap_valDir, "/buffer_100km")) ){dir.create(paste0(gap_valDir, "/buffer_100km"))}
+# if(!file.exists(paste0(gap_valDir, "/buffer_100km/high_density")) ){dir.create(paste0(gap_valDir, "/buffer_100km/high_density"))}
+# lapply(1:5, function(x){
+#   if(!file.exists(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/01_selected_points")) ){dir.create(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/01_selected_points"), recursive = TRUE)}
+#   if(!file.exists(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/02_sdm_results/evaluation/replicates")) ){dir.create(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/02_sdm_results/evaluation/replicates"), recursive = TRUE)}
+#   if(!file.exists(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/02_sdm_results/prj_models/replicates")) ){dir.create(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/02_sdm_results/prj_models/replicates"), recursive = TRUE)}
+#   if(!file.exists(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/03_gap_models/delaunay")) ){dir.create(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/03_gap_models/delaunay"), recursive = TRUE)}
+#   if(!file.exists(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/04_gap_index")) ){dir.create(paste0(gap_valDir, "/buffer_100km/high_density/pnt",x,"/04_gap_index"), recursive = TRUE)}
+# 
+# })
+
+
+
+
+

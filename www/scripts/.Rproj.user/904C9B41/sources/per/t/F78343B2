@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1566399542932.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2558620346",
+    "id" : "F78343B2",
+    "lastKnownWriteTime" : 1579716317,
+    "last_content_update" : 1579716317766,
+    "path" : "D:/Gap_analysis_UI/www/scripts/02_sdm_modeling/background_points.R",
+    "project_path" : "02_sdm_modeling/background_points.R",
+    "properties" : {
+        "cursorPosition" : "87,11",
+        "scrollLine" : "82"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 10,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

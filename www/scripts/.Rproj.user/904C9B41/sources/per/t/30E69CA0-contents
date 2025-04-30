@@ -1,0 +1,864 @@
+#### ASIGNAR CLASES CON BAJO ACC A OTRAS CLASES USANDO DESCRIPTORES
+
+install.packages("psych");library(psych)
+
+
+raw_data <-  read.csv("Z:/gap_analysis_landraces/runs/input_data/by_crop/rice_african/databases/merged_database.csv")  %>% 
+  dplyr::select(., dartseq_kclust, declat:Leaf.blade.width)
+
+pairs.panels(raw_data[,-c(1:3)], 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = TRUE,  # show density plots
+             ellipses = FALSE, # show correlation ellipses
+             lm = TRUE,
+             cor = FALSE
+             )
+
+
+other_data  <- raw_data %>% dplyr::filter(., dartseq_kclust == "K1" | dartseq_kclust == "K3"| dartseq_kclust == "Mixed") %>% dplyr::filter(., complete.cases(.))
+  
+raw_data <- raw_data %>% dplyr::filter(., !is.na(dartseq_kclust)) %>% 
+  dplyr::filter(., complete.cases(.)) %>%
+  dplyr::filter(., !duplicated(declat, declon)) %>% dplyr::filter(., dartseq_kclust != "K1" , dartseq_kclust != "K3", dartseq_kclust != "Mixed" ) %>%
+  droplevels()
+
+pca <- PCA(raw_data[,3:10], scale.unit = TRUE, ncp = 2)
+plot(pca)
+plot(pca$ind$coord, col = raw_data$dartseq_kclust)
+
+x <- as.matrix(raw_data[,3:10])
+
+tsne <- Rtsne(x,  dims =2, perplexity = 20, pca =F, theta = 0.2)
+df <- data.frame(tsne$Y, value =raw_data$dartseq_kclust)
+
+ggplot(df, aes(x= X1, y= X2, col = factor(value))) + geom_point()
+
+
+
+
+# clustering usando algoritmo hdbscan
+dst <- dist(raw_data[, 4:10], method = "euclidean")
+
+db1 <- hdbscan(dst, minPts = 6)
+
+df2 <- data.frame(pca$ind$coord, value = db1$cluster, shp = raw_data$dartseq_kclust)
+ggplot(df2, aes(x= Dim.1, y= Dim.2, col = factor(value), shape = shp)) + geom_point()
+
+
+### cluster jerarquico sobre el PCA
+hclst <- HCPC(pca)
+
+df3 <- data.frame(pca$ind$coord, value = hclst$data.clust$clust, shp = raw_data$dartseq_kclust)
+ggplot(df3, aes(x= Dim.1, y= Dim.2, col = factor(value), shape = shp)) + geom_point()+geom_vline(xintercept = 0)+
+  geom_hline(yintercept = 0)
+
+
+# cluster jerarquico sobre la matrix de distancia
+hclst2<- hclust(dst, method="ward.D")
+labs <- cutree(hclst2, k = 3)
+
+df4 <- data.frame(pca$ind$coord[,1:2], value = labs ,shp = raw_data$dartseq_kclust)
+ggplot(df3, aes(x= Dim.1, y= Dim.2, col = factor(value), shape = shp, size = 2)) + geom_point()+geom_vline(xintercept = 0)+
+  geom_hline(yintercept = 0) + labs(col = " Cluster", shape = "darTseq_Kclust")
+
+
+
+######
+ other_data$dartseq_kclust <- NA
+
+res <- classification_fun(df = raw_data[, -2], external_df = other_data[, -2])
+
+table(res$External_data_predictions$ensemble)
+res$Testing_CM
+##### diagnostics graphs
+
+dt <- raw_data %>% gather(-dartseq_kclust  ,key = "var", value = "value" )
+ggplot(dt, aes(x = value,color = factor(dartseq_kclust ))) + 
+  geom_density() + 
+  facet_wrap(~var, scales = "free")
+
+
+
+
+cdf <- data.frame("assigned" = res$External_data_predictions$ensemble, "original" = m$dartseq_kclust)
+
+table(cdf[cdf$original == "K3", 1])
+plot(raw_data[, -(1:3)])
+
+
+upper.panel<-function(x, y){
+  points(x,y, pch=19)
+  lm1 <- lm(x ~ y)
+  abline(, col = "red")
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  
+}
+pairs(raw_data[,-(1:3)], lower.panel = NULL, 
+      upper.panel = upper.panel)
+
+lm1 <- lm(raw_data[, 4] ~ raw_data[, 5])
+plot(raw_data[, 4] ~ raw_data[, 5])
+abline(lm1)
+
+
+new_data <- raw_data  %>% dplyr::filter(., dartseq_kclust == "K1" | dartseq_kclust == "K3"| dartseq_kclust == "Mixed" ) 
+new_data[complete.cases(new_data), 1] <- res$External_data_predictions$ensemble
+new_data[!complete.cases(new_data), 1] <- c("K2", "K2", "K4", "K4", "K2", "K5")
+
+table(new_data$dartseq_kclust)
+
+raw_data[which(raw_data$dartseq_kclust == "K1" | raw_data$dartseq_kclust == "K3"| raw_data$dartseq_kclust == "Mixed"), 1] <- new_data$dartseq_kclust
+
+write.csv(raw_data, "Z:/gap_analysis_landraces/runs/input_data/by_crop/rice_african/databases/darTclusters_assigned.csv")
+
+
+
+pacman::p_load(classInt)
+
+
+cd1 <- raster("Z:/gap_analysis_landraces/runs/results/common_bean/lvl_1/andean/americas/gap_models/cost_dist.tif")
+env1 <- raster("Z:/gap_analysis_landraces/runs/results/common_bean/lvl_1/andean/americas/gap_models/euclidean_dist_hclust_mahalanobis.tif")
+sdm1 <- raster("Z:/gap_analysis_landraces/runs/results/common_bean/lvl_1/andean/americas/prj_models/andean_prj_median.tif")
+
+cd <- mask(cd1, sdm1) 
+env <- mask(env1, sdm1)
+
+bx <- boxplot(cd[!is.na(cd[])])
+mn <- min(bx$out)
+
+cd_new <- cd/mn
+cd_new[which(cd_new[] > 1)] <- 1
+
+intvl1 <- classIntervals(cd_new[!is.na(cd_new[])], n = 4, style = "kmeans")
+
+
+bx_env <- boxplot(env[!is.na(env[])])
+mn2 <- min(bx_env$out)
+env_new <- env/mn2
+env_new[which(env_new[] > 1)] <- 1
+
+intvl2 <- classIntervals(env_new[!is.na(env_new[])], n = 4, style = "kmeans")
+
+gp_score <- sdm1 * mean(env_new, cd_new, na.rm = T) 
+
+intvl3 <- classIntervals(gp_score[!is.na(gp_score[])], n = 4, style = "kmeans")
+
+res_list <- list("cost_dist" = cd_new, "cost_dist_intervals" = intvl1, "environmental_rast" = env_new, "environmenta_intervals" = intvl2, "gap_score" = gp_score, "gp_score_intervals" = intvl3)
+saveRDS(res_list, "D:/OneDrive - CGIAR/Desktop/new_rasters.rds")
+
+
+ dist1 <-dist(cd[!is.na(cd[])], method  = "euclidean")
+
+ classInte
+ 
+
+
+######## new methods normalize gap scales 
+
+gap_dir <- "Z:/gap_analysis_landraces/runs/results/common_bean/lvl_1/mesoamerican/americas"
+#pnt <- paste0("pnt", 1:5)
+
+#i<-5
+sdm <- raster(paste0(gap_dir, "/prj_models/mesoamerican_prj_median.tif"))
+cd <- raster(paste0(gap_dir, "/gap_models/cost_dist.tif"))
+env <- raster(paste0(gap_dir,"/gap_models/euclidean_dist_hclust_mahalanobis.tif"))
+dela <- raster(paste0(gap_dir, "/gap_models/delaunay.tif"))
+
+stk1 <- stack(cd,env,dela)
+
+stk1 <- mask(stk1, sdm)
+
+new_rasts <- lapply(1:nlayers(stk1), function(i){
+  
+  x <- stk1[[i]]
+  bx <- boxplot(x[!is.na(x[])])
+  mn <- min(bx$out)
+  x_new <- x/mn
+  x_new[which(x_new[] > 1 )] <- 1
+  return(x_new)
+  
+})
+
+gs_dela <- sdm*mean(new_rasts[[3]], new_rasts[[2]], na.rm=T)
+gs_cost <- sdm*mean(new_rasts[[1]], new_rasts[[2]], na.rm=T)
+
+writeRaster(gs_cost, paste0(gap_dir,"/gap_models/gap_score_cost_dist.tif"))
+writeRaster(gs_dela, paste0(gap_dir,"/gap_models/gap_score_delaunay.tif"))
+writeRaster(new_rasts[[2]], paste0(gap_dir,"/gap_models/env_score_hclust_mahalanobis.tif"))
+
+plot(density(new_rasts[[3]][], na.rm = TRUE))
+
+
+
+#######  
+
+
+le <- read.csv("D:/OneDrive - CGIAR/Desktop/encuesta_lectura.csv")[, -1]
+le <- apply(le,2, as.factor) %>% data.frame
+
+
+fma <- MFA(le, group = c(5,5,5,5,5), type = c(rep("n", 5)), name.group = c("Practicas_estudinte", "Parte_academica", "uso_de_TIC", "Actitudes", "prcticas_docente"))
+
+fma$quali.var$contrib %>% View
+
+
+sums <- rowSums(le)
+cronbach.alpha(le, CI = TRUE, standardized = T)
+
+le2 <- le[,-c(6,8, 10)]
+cronbach.alpha(le2, CI = TRUE, standardized = T)
+
+intervals <- cut(sums, breaks = c(25, 50, 80, 100, 125))
+
+barplot(table(intervals)/sum(table(intervals)), xlab = "Categor?as habitos de lectura", ylab = "Porcentaje de estudiantes", names.arg = c("Pobres", "Moderados", "Buenos", "Excelentes"))
+
+barplot(table(sums)/sum(table(sums)), xlab = "Puntaje", ylab = "Frecuencia")
+
+rs1 <- readRDS("D:/OneDrive - CGIAR/Desktop/new_rasters.rds")
+plot(density(rs1$cost_dist[],na.rm = T))
+
+le3 <- le[,c(5,6)]
+le3$cat1_pe5 <- factor(le3$cat1_pe5, levels = 1:5)
+
+
+ggplot(le3, aes(x= cat1_pe5) ) + geom_bar()
+
+
+tbl <- table(factor(le3[,1], levels = 1:5))
+
+barplot(table(factor(le3[,2], levels = 1:5))/sum(table(factor(le3[,2], levels = 1:5))), ylab = "Frecuencias", names.arg = c("completamente en \n desacuerdo", 
+                                                                                "Moderadamente en \n desacuerdo",
+                                                                                "Indiferente", 
+                                                                                "Moderadamente de\n acuerdo",
+                                                                                "Completamente de \n acuerdo"))
+
+#############
+
+
+
+   get_altMetric_score2 <- function(interval = 86400) {
+         
+          alt <- altmetrics(doi = "10.1007/s00374-019-01353-y")
+           f <- altmetric_data(alt)
+           score <- round(as.numeric(f$score), 0)
+          fecha <- Sys.time() %>% as.Date()
+           
+            df <- data.frame(date = fecha,alt_score = score)
+            
+               write(paste(df[1], df[2], sep = ","), file = "Z:/gap_analysis_landraces/others/altMetrics_scores_nikola_paper.csv", append = TRUE)
+             
+              later::later(get_altMetric_score2, interval)
+         }
+   get_altMetric_score2()
+   
+   
+   
+   
+   
+##########
+   require(plotly)
+   require(raster)
+   require(foreach)
+   require(doSNOW)
+   require(doParallel)
+   require(tidyverse)
+   shp <- shapefile("C:/Users/acmendez/Google Drive/CIAT/hidden_project/Gap_analysis_UI/www/world_shape_simplified/all_countries_simplified.shp")
+   
+   df <- read.csv("https://raw.githubusercontent.com/plotly/datasets/master/2011_us_ag_exports.csv")
+  
+   rs1 <- raster("Z:/gap_analysis_landraces/runs/gap_richness_map.tif")
+   #definir los cultivos y regiones
+   crops <- c("common_bean", "potato", "sorghum", "african_maize", "banana", "barley", "maize", "rice_african",  "wheat_bread", "wheat_durum")
+   #rast_paths <- paste0("Z:/gap_analysis_landraces/runs/results/", crops, "/", paste0("lvl_1/",crops, "_gap_richness.tif") )
+   #regions <- c("americas", "americas", "sgh_custom", "africa", "banana_custom", "world", "americas", "africa", "world",  "world")
+   race_nm <- list.dirs(paste0("Z:/gap_analysis_landraces/runs/results/", crops, "/lvl_1"), recursive = FALSE)
+   #limpiar las rutas a las que no queremos entrar
+   race_nm <- race_nm[-c(6,10, 11, 12, 14, 15, 22, 23, 24, 28, 32)]
+   
+   #seleccionar todos los rasters a cargar
+   drs <- list.files(race_nm, recursive  = T, full.names = T)
+   rast_paths <- drs[grepl("gap_class_final.tif$",drs)]
+   rast_paths <- rast_paths[!grepl("old",rast_paths)]
+
+   nms <- substring(rast_paths, first = regexpr("results/", rast_paths)+8, last =  regexpr("/lvl_1", rast_paths)-1 )
+   dummy <- substring(rast_paths, first = regexpr("lvl_1/", rast_paths)+6, last =  nchar(rast_paths) )
+   race_lab <- substring(dummy, first = 1, last = regexpr("/", dummy)-1 )
+   new_nms <- paste0(nms, ".", race_lab)
+   
+   rst<- lapply(1:length(rast_paths), function(i){
+     cat("Importing raster:", rast_paths[i], "\n")
+     x <- raster(rast_paths[i])
+     x[which(x[] != 2) ] <- NA
+     x[which(x[] == 2) ] <- 1
+     names(x) <- paste0(new_nms[i], "_gap_class_final")
+     return(x)
+   })
+   
+   ncores <- 20
+   cl <- makeSOCKcluster(ncores)
+   registerDoSNOW(cl)
+  
+   results <- foreach( i = 1:length( rst), .packages = c("raster", "sp", "tidyverse"))  %dopar% {
+   
+     vals <- raster::extract(rst[[i]], shp) %>% lapply(., function(k){ max(k, na.rm = TRUE)}) %>% unlist
+     vals[is.infinite(vals)] <- 0
+      return(vals)
+   }
+
+   results <- readRDS("Z:/gap_analysis_landraces/others/all_crops_plotly.rds")
+   
+   #falta <- readRDS("Z:/gap_analysis_landraces/others/falta.rds")
+   #results <- data.frame(results, sorghum.Bicolor = falta)
+   #saveRDS(results, "Z:/gap_analysis_landraces/others/all_crops_plotly.rds")
+   
+   
+   counts_races <- data.frame(code = shp@data$ISO3,category = "country",state = shp@data$NAME, results)
+  counts_races$state <- as.character(counts_races$state)
+  counts_races$code <- as.character(counts_races$code)
+     sudan <- counts_races[which(counts_races$state == "Sudan"), ]
+     counts_races <- rbind(counts_races, c(code = "SSD", sudan[2], state ="South sudan", sudan[-c(1:3)]))
+     
+   #funcion para filtrar la base de datos y etiquetar seg?n el cultivo y la raza  
+     filtered_db <- function(counts_races = counts_races, crop = crops[1]){
+       
+     base <- counts_races %>% dplyr::select(., code, category, state) 
+     x <- counts_races[,  grepl(paste0("^",crop), names(counts_races))]
+    f  <-   t( apply(x, 1, function(i, nms = names(x)){
+      f <- ifelse(i == 1, f <- substr(names(x), start = nchar(crop)+2, stop = nchar(names(x))) , f <- "") 
+      return(as.character(f))
+     }) )
+
+    counts <- rowSums(x)
+    hover  <- apply(f, 1, function(i){
+      if(all(i == "")){
+        g <- paste( "No gaps", "<br>", collapse = "")
+        lab <- paste( "Races with gaps: <br>",g, collapse = "" )
+      }else{
+        g <- paste( as.character(i), "<br>", collapse = "")
+        lab <- paste( "Races with gaps: <br>",g, collapse = "" )
+      }
+
+      return(lab)
+    })
+    
+    df <- data.frame(base, x, f, hover, counts)
+    return(df)
+    }
+
+filtered_db(counts_races = counts_races, crop = crops[1])[193,]
+
+#conteo para calcular el numero total de gaps por crop
+crop_counts <- lapply(1:10, function(k){
+  
+  df <- filtered_db(counts_races = counts_races, crop = crops[k])
+  df$counts[which(df$counts != 0)] <- 1
+  return(df$counts)
+})
+
+counts_per_crop <- data.frame(counts_races[, 1:3], do.call(cbind, crop_counts))
+counts_per_crop$counts <- rowSums(counts_per_crop[, -c(1,2,3)])
+counts_per_crop$hover <-  with(counts_per_crop, paste(state, '<br>', "Total number of crops with Gaps:", counts))
+
+
+     
+#calcular conteos para todos los crops y races
+all_crops_races <- lapply(1:10, function(k){
+  
+  df <- filtered_db(counts_races = counts_races, crop = crops[k])
+  return(df$counts)
+})
+  
+count_all_crops <- data.frame(counts_races[, 1:3], do.call(cbind, all_crops_races))
+count_all_crops$counts <- rowSums(count_all_crops[, -c(1,2,3)])
+count_all_crops$hover <-  with(count_all_crops, paste(state, '<br>', "Total number of landrace groups with Gaps:", counts))
+
+
+
+  ### creacion del mapa interactivo
+  
+  
+  Sys.setenv("plotly_username"="andresk159")
+  Sys.setenv("plotly_api_key"="Wti3BkMiLkkiPsrjihZL")
+  
+  l <- list(color = toRGB("black"), width = 0.5)
+  g <- list(
+    showframe = FALSE,
+    showcoastlines = TRUE,
+    projection = list(type = 'Mercator'),
+    showland = TRUE
+  )
+  
+  btns<- function(nlayers = 12, i, lab = ""){
+    logical <- rep(FALSE, nlayers)
+    logical[i] <- TRUE
+    list(method = "update",
+         args = list(
+           list(visible = logical,
+                showscale = logical)
+           
+         ),
+         label = lab
+         
+    )
+  }
+  
+  
+  p<-   plot_geo() %>%         add_trace(data = count_all_crops, 
+                                         z = ~counts,
+                                         color = ~counts, 
+                                         colors = 'Blues', 
+                                         text = ~hover, 
+                                         locations = ~code,
+                                         hoverinfo = "text",
+                                         marker = list(line = l),
+                                         visible = TRUE,
+                                         showscale = TRUE,
+                                         colorbar = list(title = "counts")
+  ) %>% 
+    add_trace(data = counts_per_crop, 
+              z = ~counts,
+              color = ~counts, 
+              colors = 'Blues', 
+              text = ~hover,
+              hoverinfo = "text",
+              locations = ~code,
+              marker = list(line = l),
+              visible =FALSE,
+              colorbar = list(title = "counts")
+    ) %>% add_trace(data = filtered_db(counts_races = counts_races, crop = crops[1]), 
+                    z = ~counts,
+                    color = ~counts, 
+                    colors = 'Blues', 
+                    text = ~hover, 
+                    locations = ~code,
+                    hoverinfo = "text",
+                    marker = list(line = l),
+                    visible = FALSE,
+                    colorbar = list(title = "counts", tickvals = 1:10, tickmode = "array") 
+    )  %>%  add_trace(data = filtered_db(counts_races = counts_races, crop = crops[3]), 
+                      z = ~counts,
+                      color = ~counts, 
+                      colors = 'Blues', 
+                      text = ~hover, 
+                      locations = ~code,
+                      hoverinfo = "text",
+                      marker = list(line = l),
+                      visible =F,
+                      colorbar = list(title = "counts")
+    )  %>% layout(title = "Landrace Gaps per Country", 
+                  geo = g,
+                  
+                  updatemenus = list(
+                    list(
+                      y = 0.8,
+                      
+                      buttons = list(
+                        btns(nlayers = 4,i = 1, lab = "All Crops and Races"),
+                        btns(nlayers = 4,i = 2, lab = "All crops"),
+                        btns(nlayers = 4,i = 3, lab = "Common Bean"),
+                        btns(nlayers = 4,i = 4, lab = "Sorghum")
+                        
+                        
+                      ))
+                  )
+                  
+    )
+  p
+  
+  
+  
+  
+  
+  chart_link = api_create(p, filename="Landrace-gaps-country-lvl", fileopt = "overwrite")
+  
+  ############ estados de mexico extraction
+  
+  shp_mex <- shapefile("C:/Users/acmendez/Downloads/turquia_shp/tur_polbnda_adm1.shp")
+  
+  rs1 <- raster("Z:/gap_analysis_landraces/runs/gap_richness_map.tif")
+
+  mex_vals <- raster::extract(rs1, shp_mex)  
+  mex_vals <- mex_vals %>% lapply(., function(k){ max(k, na.rm =T)}) %>% unlist
+  df <- data.frame(code = shp_mex@data$pcode, state = shp_mex@data$adm1_tr, category = "state",   counts = mex_vals)
+  df$hover <- with(df, paste(state, '<br>', "Total number of landrace groups with Gaps:", counts))
+  
+  require(leaflet)
+  require(htmlwidgets)
+  require(rgeos)
+  shp_mex2 <- SpatialPolygonsDataFrame(rgeos::gSimplify(shp_mex, tol = 0.08), shp_mex@data)
+
+  shp_ctm <- shp_mex2
+  bins <- c(0, 2 , 6, max(df$counts))
+  
+  pal <- colorNumeric("Blues", domain = df$counts)
+  
+ m <- leaflet(shp_ctm) %>% addProviderTiles(providers$CartoDB.Positron)%>%setView(lat =   39.113262 , lng =  34.740872, zoom = 4)  %>%addPolygons(
+    fillColor =  ~pal( df$counts),
+    weight = 1,
+    opacity = 1,
+    color = "black",
+    dashArray = "1",
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 3,
+      color = "white" ,
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = lapply(df$hover, htmltools::HTML),
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")
+  ) %>% 
+    addLegend(pal = pal, values = ~ df$counts, opacity = 0.7, title = NULL,
+              position = "bottomright")
+ m
+ saveWidget(m, file="Z:/gap_analysis_landraces/others/turquia_states_landrace_count.html", selfcontained = FALSE)
+  
+ 
+ 
+ df <- read.delim("clipboard", header = T)
+br <-  df %>% group_by(., crop) %>% summarise(., me = mean(UP), sd = sd(UP) ) %>% arrange(., desc(me))
+br[c(7,10,13), 3] <- 1
+
+  ggplot(br, aes(x = reorder(crop, -me), y = me))+ 
+    geom_bar(stat = "identity") +
+    geom_errorbar(aes(ymin = me - sd, ymax = me + sd), width=.2) +
+    ylab("Average Coverage")+
+    xlab("Crop")
+  
+
+  final_gap_rast <- raster("Z:/gap_analysis_landraces/runs/results/wheat_durum/lvl_1/g2/wheat_custom/gap_models/gap_class_final.tif")
+  wmask <- final_gap_rast
+  wmask[!is.na(wmask[])] <-1
+  rast_area <- raster::area(final_gap_rast) * wmask
+  
+  sdm_mask <- raster::mask(wmask, final_gap_rast)
+  sdm_area <- rast_area
+  total_sdm_area <- sum(sdm_area[], na.rm = TRUE)
+ 
+  
+  high_conf <- final_gap_rast
+  high_conf[which(high_conf[] != 2)] <- 1
+  high_conf[which(high_conf[] == 2)] <- NA
+  high_conf <- high_conf * rast_area
+  total_hg_conf <- sum(high_conf[], na.rm = TRUE)
+  high_conf_percent <-  (total_hg_conf/total_sdm_area)*100
+  
+  low_conf <- final_gap_rast
+  low_conf[which(low_conf[] != 0)] <- NA
+  low_conf[which(low_conf[] == 0)] <- 1
+  low_conf <- low_conf * rast_area
+  total_lw_conf <- sum(low_conf[], na.rm = TRUE)
+  low_conf_percent <-  (total_lw_conf/total_sdm_area)*100  
+  
+  
+  
+  
+  spam_names <- c("BEAN", 
+                  "POTA", 
+                  "BARL", 
+                  "BANA", 
+                  "RICE", 
+                  "CHIC", 
+                  "WHEA", 
+                  "CASS", 
+                  "MAIZ", 
+                  "YAMS", 
+                  "LENT", 
+                  "SWPO", 
+                  "SORG", 
+                  "GROU", 
+                  "COWP",
+                  "PIGE",
+                  "PMIL")
+  
+  fls <- list.files("Z:/gap_analysis_landraces/runs/input_data/MapSPAM2005/Yield", pattern = "_TA", full.names = T)
+  fls <- fls[grepl(".tif$", fls)]
+  wrl <- raster("Z:/gap_analysis_landraces/runs/input_data/mask/mask_world.tif")
+  spam_nms <- read.csv("Z:/gap_analysis_landraces/others/Mapspam_crops_names.csv")
+  
+  k <- "yield"
+  lapply(fls, function(i){
+    cat("processing raster:", i,"\n")
+    raster(i) %>% 
+      raster::resample(., wrl) %>% 
+      writeRaster(., paste0("D:/OneDrive - CGIAR/Desktop/mapas/mapspam/",k ,"/", k, "_", spam_nms[ grepl(pattern = substring(names(.), first = 26, last =  29), toupper(spam_nms[,2]), fixed = T),1 ]
+, ".tif"  ))
+    
+  })
+    
+  
+  install.packages("dataverse")
+  require(dataverse)  
+  
+  Sys.setenv("DATAVERSE_KEY" = "6bd06c3c-d25b-452c-a427-54508c6f4612")
+  
+  Sys.setenv("DATAVERSE_SERVER" = "dataverse.harvard.edu")
+  
+  dvs <- dataverse_search("\"CIAT - International Center for Tropical Agriculture Dataverse\"", type = "dataset")
+  monogan <- get_dataverse("CIAT")
+  monogan_data <- dataverse_contents(monogan)
+  d1 <- get_dataset(monogan_data[[1]])
+  dataset_files(monogan_data[[1]])
+  f <- get_file(d1$files$id[2])
+  d1$files
+  
+  download.file("https://doc-0c-6k-docs.googleusercontent.com/docs/securesc/et701mtkbspce9b5hlv8mlk1amlnek2f/35ku8pvka7alkq3pf6535b3901c2nj86/1556892000000/16449092164346360626/16449092164346360626/1lzLy9Xl_i2rCCkQUcX-OE-IQzX6p2UhM?h=03485630448885733045&e=download", destfile = "D:/OneDrive - CGIAR/Desktop/mapas/mapspam/mierda.txt")
+  install.packages("googledrive")
+  drive_download(as_id("https://docs.google.com/document/d/1XzPiwdLxV34qSlW_BHyrRPC7CKzOKLNmCWY-55Gq_wk/edit?usp=sharing"), path = "D:/OneDrive - CGIAR/Desktop/mapas/mapspam/mierda.txt", overwrite = T)
+  
+
+  
+  
+  download.file("https://drive.google.com/$type1oZWHEMVPSWeSki7aTqTGgFS3_vq8X785WYMa_Mw6NF0/edit?usp=sharin", destfile = "D:/OneDrive - CGIAR/Desktop/mapas/mapspam/mierda.txt")
+  
+  
+    download.file("https://drive.google.com/uc?export=download&id=1mHe733sUO7eGTquQ2IoU5s92l1XJvqpq",destfile = "D:/OneDrive - CGIAR/Desktop/mapas/mapspam/mierda.tif", mode = "wb")
+  
+    #drive_find(pattern = "generic_rasters",n_max = 200)
+    
+   x <-  drive_ls(path = as_id("1xkk01Tob2DrvBvvkzr2HNn3EoIJ07lkX")) %>% 
+     dplyr::mutate(., download_url = paste0("https://drive.google.com/uc?export=download&id=", id)) %>%
+     dplyr::select(., name, download_url)
+     
+   write.csv(x, "C:/Users/acmendez/Google Drive/CIAT/hidden_project/Gap_analysis_UI/www/generic_rasters.csv")
+   labs <- list("yield_", "production_", "harvested_area_")
+   
+  dw_urls <-  lapply(labs, function(i){
+     
+     drive_find(i, n_max = 200) %>% 
+       dplyr::mutate(., download_url = paste0("https://drive.google.com/uc?export=download&id=", id)) %>%
+       dplyr::select(., name, download_url)
+     
+     
+   }) %>%    do.call(rbind, .) 
+
+  dw_urls <- dw_urls %>% dplyr::mutate(., screen_name = substring( name, first = regexpr("_",text = name )+1, last = regexpr("\\.",text = name )-1 ))
+  
+   write.csv( dw_urls,'C:/Users/acmendez/Google Drive/CIAT/hidden_project/Gap_analysis_UI/www/downloadable_files.csv', row.names = F)
+
+   
+   
+  ###### crop wild relatives db
+   
+   wilds <- read.csv("Z:/gap_analysis_landraces/runs/input_data/primary_genepool/public_cwr.csv", sep = "|")
+
+wilds_2 <- wilds %>% dplyr::select(., f_x1_genus, f_x1_sp1, final_lat, final_lon)
+wilds_2[wilds_2$final_lat == "\\N", 3] <- NA
+wilds_2[wilds_2$final_lon == "\\N", 4] <- NA
+wilds_2 <- wilds_2[complete.cases(wilds_2),]
+wilds_2<- wilds_2[-2431,]
+
+wilds_2$f_x1_genus <- tolower(as.character(wilds_2$f_x1_genus))
+wilds_2$f_x1_sp1 <- tolower(as.character(wilds_2$f_x1_sp1))
+wilds_2$final_lat <- as.numeric(as.character(wilds_2$final_lat)) 
+wilds_2$final_lon <- as.numeric(as.character(wilds_2$final_lon))
+names(wilds_2) <- c("genus", "name", "lat", "lon")
+
+#write.csv(wilds_2, "C:/Users/acmendez/Google Drive/CIAT/hidden_project/Gap_analysis_UI/www/cwr_coords.csv", row.names = F)
+
+
+
+oryza_wild <- wilds_2 %>% dplyr::filter(., genus == "oryza" , name == "rufipogon"| name == "nivara")
+plot(shp)
+points(oryza_wild[,4:3])
+
+
+
+data <- oryza_wild %>% dplyr::filter(., lat != 0 | lon != 0) %>% 
+  dplyr::filter(., !is.na(lat) | !is.na(lon))
+
+cat("Removing coordinates on Oceans/Seas \n")
+data <- data[which(!is.na(raster::extract(x = msk, y = data[,c("lon", "lat")]))),]
+
+
+cat("Removing duplicated coordinates \n")
+rep <- which(duplicated( raster::extract(msk, data[ , c("lon", "lat")], cellnumbers = TRUE)  ))
+nas <- which(is.na(data$Y))
+pos <- setdiff(rep, nas)
+if(length(rep) != 0){
+  data  <- data[-pos, ]
+}
+
+x <- data[, 3:4]
+coordinates(x) <- ~lon+lat
+  crs(x) <- crs(msk)
+write.csv(data, "file:///H:/input_data/primary_genepool/asian_rice/Oryza_rufipogon_nivara.csv", row.names = F)
+  shapefile(x, "H:/input_data/primary_genepool/asian_rice/cwr_Orufipogon_Onivara.shp")
+
+
+
+cords <- wilds_2 %>% dplyr::filter(., genus == "oryza" ) %>% dplyr::select(., lon, lat)
+
+
+coordinates(cords) <- ~lon+lat
+crs(cords) <-  crs(mask)
+r <- mask(mask, cords)
+system.time( euc <- raster::distance(r))
+
+msk <- raster("Z:/gap_analysis_landraces/runs/input_data/mask/mask_world.tif")
+mask_table <- as.data.frame(msk, xy = T) %>% dplyr::filter(., !is.na(mask_world))
+
+
+new_rst <- apply(cords[1:10,], 1, function(i){
+  euc1 <- sqrt((i[1] - mask_table$x)^2 + (i[2] - mask_table$y)^2)
+  return(euc1)
+})
+
+tl1 <- cbind(mask_table[,1:2], apply(new_rst,1, min) )
+r1 <- rasterFromXYZ(tl1, res = res(msk), crs = crs(msk))
+
+
+r1.1 <- distanceFromPoints(msk,cords[1,]) 
+r1.1 <- raster::mask(r1.1, msk)
+
+writeRaster(r1, "D:/OneDrive - CGIAR/Desktop/mapas/r1_new.tif")
+xyFromCell(msk, 19125360)
+
+library(geosphere)
+system.time(x <- distm(c(cords$lon[1], cords$lat[1]), mask_table[1,1:2], fun = distGeo))
+system.time(x <- distGeo( c(cords$lon[1], cords$lat[1]), mask_table[,1:2], a=6378137, f=1/298.257223563))
+
+
+dln <-  abs(cords$lon[1] -  mask_table[, 1])
+dlt <-  abs(cords$lat[1] -  mask_table[1, 2])
+
+geo_dists <- function(lon, lat, mask_table){
+  
+  x <- 6378137*acos(sin(lat)* sin( mask_table[, 2]) + cos(lat)*cos(mask_table[, 2])*cos(lon - mask_table[, 1])  )
+  return(x)
+}
+
+new_distGeo <- Vectorize(geo_dists, vectorize.args= c("lon", "lat"))
+
+ new_distGeo(lon = cords$lon[1], lat = cords$lat[1], mask_table = mask_table)
+ 
+ x2 <- 6378137*acos(sin(cords$lat[1])* sin( mask_table[2, 2]) + cos(cords$lat[1])*cos(mask_table[2, 2])*cos(cords$lon[1] - mask_table[2, 1])  )
+ 
+
+tl2 <- cbind(mask_table[,1:2], euc1 = x)
+
+r2 <- rasterFromXYZ(tl2, res = res(msk), crs = crs(msk))
+writeRaster(r2, "D:/OneDrive - CGIAR/Desktop/mapas/r2.tif")
+
+
+system.time(x <- distGeo( cords[1,1:2], mask_table[,1:2], a=6378137, f=1/298.257223563))
+
+
+
+
+
+new_distGeo(c(cords$lon[1], cords$lat[2]), mask_table[,1:2])
+
+geo_dists(lon = cords$lon[1], lat = cords$lat[1])
+
+ctm_dists <-  mapply(geo_dists, lon = cords$lon, lat = cords$lat)
+
+
+proj <- "+proj=tpeqd +lat_1=0 +lon_1=0 +lat_2=60 +lon_2=60 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs "
+msk2 <- projectRaster(msk, crs = proj)
+msk_wrld <- as.data.frame(msk2, xy = T)
+mask_table2 <- msk_wrld %>% dplyr::filter(., !is.na(.))
+cords2 <- cords
+coordinates(cords2) <- ~lon+lat
+crs(cords2) <-  crs(msk)
+new_cords <- spTransform(x = cords2, CRSobj = proj)
+cords_nw <- new_cords@coords
+
+sqrt((cords$lon[1] - mask_table$x)^2 + (cords$lat[1] + mask_table$y)^2)
+
+tl1 <- cbind(mask_table[,1:2], euc1 = sqrt((cords_nw$lon[1] - mask_table2$x)^2 + (cords_nw$lat[1] + mask_table2$y)^2))
+
+r1 <- rasterFromXYZ(tl1, res = res(msk), crs = crs(msk))
+
+writeRaster(r2, "D:/OneDrive - CGIAR/Desktop/mapas/r2.tif")
+
+
+
+
+
+
+lf <- list.files("Z:/gap_analysis_landraces/runs/input_data/generic_rasters/world", pattern = "^bio_.*.tif$", full.names = T)
+
+
+lapply(lf, function(i){
+  cat("processing raster:", i, "\n")
+  #print(raster(i) )
+  raster(i) %>% writeRaster(., paste0("D:/OneDrive - CGIAR/Desktop/mapas/new_heave_rasters/", names(.), ".tif"), overwrite =T)
+  
+})
+
+
+raster("Z:/gap_analysis_landraces/runs/input_data/generic_rasters/world/dist_h_set.tif") %>%
+  writeRaster(., paste0("D:/OneDrive - CGIAR/Desktop/mapas/new_heave_rasters/dist_h_set.tif"), overwrite =T)
+
+raster("Z:/gap_analysis_landraces/runs/input_data/generic_rasters/world/dist_rivers.tif") %>%
+  writeRaster(., paste0("D:/OneDrive - CGIAR/Desktop/mapas/new_heave_rasters/dist_rivers.tif"), overwrite =T)
+
+#########################
+
+br <- shp[shp@data$NAME=="Brazil",]
+
+erdos.renyi.game(sample(1:100, 1), p.or.m = runif(1))
+
+
+
+g <- watts.strogatz.game(1, 20, 1, 0.35, loops = FALSE, multiple = FALSE)
+plot(g, vertex.label= NA, edge.arrow.size=0.02,vertex.size = 0.5, xlab = "Small world model")
+
+
+g <- barabasi.game(20, power = 1.2, m = NULL, out.dist = NULL, out.seq = NULL,
+                   out.pref = FALSE, zero.appeal = 1, directed = FALSE,
+                   algorithm ="psumtree", start.graph = NULL)
+plot(g, vertex.label= NA, edge.arrow.size=0.02,vertex.size = 0.5, xlab = "Scale-free network model")
+
+
+g <- static.power.law.game(20, 40, exponent.out= 2.2, exponent.in = -1, loops = FALSE, multiple = FALSE, finite.size.correction = TRUE) 
+plot(g, vertex.label= NA, edge.arrow.size=0.02,vertex.size = 0.5, xlab = "Scale-free network model (static)")
+
+as.matrix(g)
+x <- as_adjacency_matrix(g)
+as.data.frame(as.matrix(x)) %>% write.table("clipboard", row.names = F, col.names = F)
+
+
+
+
+m <- read.delim("clipboard") %>% as.data.frame()
+
+net <- lapply(1:nrow(m), function(k){
+  pr<- m[ m[, 3+ k] == 1, 2:3]
+  prime <- m[k, 2:3]
+  
+ fin <- apply(pr, 1,function(i){
+    x <- rbind(prime, i) %>% as.data.frame(.)
+    coordinates(x) <- ~lon+lat
+    return(x)
+  }) %>% do.call(rbind,.) %>% Line(.) %>% Lines(., ID=k[1])
+  return(fin)
+})
+
+
+mega_lines <- SpatialLines(net)
+crs(mega_lines) <- crs(raster("D:/OneDrive - CGIAR/Documents/K5/prueba/input_data/mask/mask_mex_ctm.tif"))
+plot(mega_lines)
+
+w <- runif(20,1,2)
+leaflet(mega_lines ) %>% addTiles() %>% addPolylines(weight = 1) %>% 
+  addCircles(., data = data.frame(m[,1:3],w), radius = ~w*1000, color = "#F4A460", stroke = FALSE, fillOpacity = 0.5) %>%
+  addPopups( data = m[,1:3], lng = m$lon, lat = m$lat, popup = ~m$miembros, options = list(autoPan = F, closeButton = F))
+
+mega_lines@lines
+
+######## red desde una edge list
+
+
+library(igraph)
+edge <- read.delim("clipboard", header = T)
+
+el <- get.adjacency(graph.edgelist(as.matrix(edge %>% select(1:2)), directed=FALSE))
+
+graph_from_edgelist(as.matrix(edge[,1:2]), directed = TRUE) %>% plot

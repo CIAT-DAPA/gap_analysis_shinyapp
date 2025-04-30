@@ -1,0 +1,940 @@
+#
+# This is the server logic of a Shiny web application. You can run the 
+# application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+# 
+#    http://shiny.rstudio.com/
+#
+
+suppressMessages(if(!require(pacman)){install.packages("pacman");library(pacman)}else{library(pacman)})
+pacman::p_load(tcltk, adehabitatHR,   raster, rgdal, doSNOW, sdm, dismo,  rgeos, distances,   sp, shiny, 
+               tidyverse, rlang, sf, gdistance, caret, earth, fastcluster,  FactoMineR, deldir,
+               parallelDist, bindrcpp, foreach, doParallel,  pROC, maxnet, usdm, mltools, ISLR, nnet,ranger,  googleVis)
+
+# setting global variables
+g <- gc(reset = T); rm(list = ls()); options(warn = -1); options(scipen = 999)
+urls <- read.csv("www/downloadable_files.csv", stringsAsFactors = F)
+shp <- shapefile("www/world_shape_simplified/all_countries_simplified.shp")
+shp <- shp[shp@data$ISO3 != "ATA",]
+scrDir <- "www/scripts"
+coor_sys <- crs("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
+if(Sys.getenv('SHINY_PORT') == "") options(shiny.maxRequestSize=30*1024^2)
+options(scipen = 999)
+update_scripts <- FALSE
+source("www/helpers.R", local = TRUE)
+
+
+# Define server logic required to draw a histogram
+server <- function(input, output,session) {
+  
+  
+#**********************************
+##### Reactive values lists #####
+#*********************************
+  
+  resources <- reactiveValues()
+  shp_custm <- reactiveValues()
+  clicklist <- reactiveValues(ids = vector(), names = vector())
+  paths     <- reactiveValues()
+
+#**********************************
+### monitoring folder system ####
+#********************************
+observe({
+
+  if(!is.null(paths$region) & !is.null(paths$crop) & !is.null(paths$occName)){
+    #results per race dir
+    paths$results_dir    <- paste0(paths$baseDir, "/results/", paths$crop, "/", paths$region)
+    if(!file.exists(paths$results_dir)){dir.create(paths$results_dir, recursive = TRUE)}
+            #child folders
+            paths$sp_results <- paste(paths$results_dir, paths$occName, sep = .Platform$file.sep)
+            paths$occDir     <- paste0(paths$sp_results, "/occurrences");if(!file.exists(paths$occDir)){dir.create(paths$occDir, recursive = TRUE)}
+            paths$gap_outDir <- paste0(paths$sp_results, "/gap_scores");if(!file.exists(paths$gap_outDir)){dir.create(paths$gap_outDir, recursive = TRUE)}
+            paths$sdm_outDir <- paste0(paths$sp_results, "/species_distribution");if(!file.exists(paths$sdm_outDir)){dir.create(paths$sdm_outDir, recursive = TRUE)}
+            paths$gap_valDir <- paste0(paths$sp_results, "/gaps_validation");if(!file.exists(paths$gap_valDir)){dir.create(paths$gap_valDir, recursive = TRUE)}
+    #input data dir folders creation
+    paths$input_data_dir <- paste0(paths$results_dir, "/input_data")
+    if(!file.exists(paths$input_data_dir)){dir.create(paths$input_data_dir, recursive = TRUE)}          
+            #child Folders
+            paths$aux_rasts  <- paste0(paths$input_data_dir, "/auxiliar_rasters");if(!file.exists(paths$aux_rasts)){dir.create( paths$aux_rasts, recursive = TRUE)} 
+            paths$env_rasts  <- paste0(paths$input_data_dir, "/environmental_rasters");if(!file.exists(paths$env_rasts)){dir.create(paths$env_rasts, recursive = TRUE)} 
+            paths$spam_rasts <- paste0(paths$input_data_dir, "/MapSpam_rasters");if(!file.exists(paths$spam_rasts)){dir.create(paths$spam_rasts, recursive = TRUE)}
+            paths$data_dir   <- paste0(paths$input_data_dir, "/cleaned_data");if(!file.exists(paths$data_dir)){dir.create(paths$data_dir, recursive = TRUE)}
+            paths$mask_path  <-  paste(paths$input_data_dir, paste0("mask_" , paths$region, ".tif") , sep = .Platform$file.sep)
+            paths$bd_file    <- paste0(paths$data_dir, "/", paths$crop, "_bd.csv")
+            
+            if(file.exists(paths$bd_file)){resources$cleaned_data <- read.csv(paths$bd_file, header = T, stringsAsFactors = F)}
+            #save automatically inputs and results to be restored 
+            saveRDS(paths, paste0(paths$baseDir, "/",paths$crop, "_", paths$occName ,"_Rsession.rds") )
+            }
+ 
+}, priority = 1)
+  
+#***************************
+#### climate extraction ####
+#**************************
+
+clim_layer <- reactive({
+  req(c(paths$env_rasts, paths$spam_rasts))
+  generic_rasts <- list.files(paths$env_rasts, pattern = ".tif$", full.names = TRUE)
+  sp_rasts      <- list.files(paths$spam_rasts, pattern = ".tif$", full.names = TRUE)
+  #protect no Mapspam rasters avaliable
+  if(length(sp_rasts != 0)){
+    current_clim_layer_generic <- lapply(generic_rasts, raster)
+    current_clim_layer_sp      <- lapply(sp_rasts, raster)
+    current_clim_layer         <- stack(c(current_clim_layer_generic, current_clim_layer_sp))
+  }else{
+    current_clim_layer         <- lapply(generic_rasts, raster) %>% raster::stack(.) 
+  }
+
+  return(current_clim_layer)
+})  
+  
+  output$messageMenu <- renderMenu({
+    
+    crop    <- ifelse(is.null(paths$crop), "Not specified yet", paths$crop)
+    occName <- ifelse(is.null(paths$occName), "Not specified yet", paths$occName)
+    region  <- ifelse(is.null(paths$region), "Not specified yet", paths$region)
+    
+    msgs <- list(messageItem(from = "Crop Name" , message = crop,    icon = icon("fas fa-seedling")),
+                 messageItem(from = "Group Name", message = occName, icon = icon("fas fa-sitemap")),
+                 messageItem(from = "Region"    , message = region,  icon = icon("fas fa-map-pin")) )
+   if(nchar(input$set.crop.name) == 0 | nchar(input$set.level.name) | nchar(input$mask_name)){
+     icono <- icon("warning")
+   }else{
+     icono <- icon("info-circle")
+   }
+    # This is equivalent to calling:
+    #   dropdownMenu(type="messages", msgs[[1]], msgs[[2]], ...)
+    dropdownMenu(type = "messages", .list = msgs, icon = icono)
+    
+  })
+#************************* 
+#### Restore session #####
+#*************************
+  output$restoreSession <- renderMenu({
+    msgs2 <- list(notificationItem(
+      text = "Restore session",
+      icon = icon("fas fa-undo-alt") 
+    ) %>%
+      tagAppendAttributes(., id = "restore"))
+    
+    dropdownMenu(type = "notifications", .list = msgs2, icon = icon("fas fa-user-cog") )
+  })
+  
+  #when user click on restore then open a modal dialog to import rsession file
+    shinyjs::onclick("restore", expr = function(){
+      output$modal1 <- renderUI({
+        showModal(modalDialog(
+          title = tags$strong("Restore Session"),
+          tags$div(
+            tags$div(style = "float:left;", tags$img(src = 'restore-icon.jpg', eigth = "45px", width = "45px")),
+            tags$div(style = "margin-left: 50px;",tags$h5("
+            Did your last Session closed unexpectedly or went something wrong? You can restore the variables and results from a previous session, or start a
+            new session if you need to process other race, class or genetic group."))
+          ),
+          tags$hr(),
+          fileInput("restorePath", "Select  Rsession.rds file:"),
+          bsButton("accept_restore", size="default",label = "Restore", block = F, style="primary"),
+          bsTooltip(id = "Restore", title = "Restore Previous Session", placement = "right", trigger = "hover"),
+          easyClose = FALSE,
+          footer = modalButton("Cancel")
+        ))
+    })
+  })
+
+    #save recursively response variables
+    observeEvent(input$accept_restore, {
+
+      tryCatch({
+        
+        rsession_path <- input$restorePath$datapath
+        if(nchar(rsession_path != 0)){
+          
+          rsd <- readRDS(rsession_path)
+          #selec main variables to restore
+          paths$baseDir  <-  rsd$baseDir
+          paths$crop     <- rsd$crop
+          paths$region   <- rsd$region
+          paths$occName  <- rsd$occName
+          paths$bd_file  <- rsd$bd_file
+          
+          sendSweetAlert(
+            session = session,
+            title = "Session restored !!",
+            text = "Your Session was successfully restored.",
+            type = "success"
+          )
+          print("Reactive values were uploaded.")
+          
+        }else{
+          safeError("Not a valid file Path detected.")
+        }
+        
+      }, error = function(e){
+        sendSweetAlert(
+          session = session,
+          title = "Error !!",
+          text = paste("Your Session could not be restored.  \n", e),
+          type = "error"
+        )
+      })
+  
+    })
+#*************************
+##### Root folders ###### 
+#***********************
+    
+  #create button to select container folder to create dirs and download data
+  shinyDirChoose(input , id =  "select_path_btn", updateFreq = 0, session = session,
+                 defaultPath = "", roots =  c('Documents' = Sys.getenv("HOME"), 'Local Disk' = Sys.getenv("HOMEDRIVE") ))
+  
+  
+  #boton para seleccionar el directorios
+  observeEvent(input$select_path_btn, {
+    text_path <- parseDirPath(roots =  c('Documents' = Sys.getenv("HOME"), 'Local Disk' = Sys.getenv("HOMEDRIVE") ), input$select_path_btn)
+    
+    paths$baseDir <- as.character(text_path)
+    #.GlobalEnv$baseDir <- as.character(text_path)
+    updateTextInput(session, "selected.root.folder", 
+                    label = "Dir path chosen",
+                    value = as.character(text_path)
+    )
+    
+  })
+ 
+
+  #boton para crear los directorios y descargar los scripts desde github
+  observeEvent(input$create_dirs,{
+  
+    if(!is.null(paths$baseDir)){
+     
+      paths$crop <- input$set.crop.name
+      paths$occName <- input$set.level.name
+      
+      if(nchar(paths$crop) > 0 & nchar(paths$occName) > 0 ){
+       
+        paths$global_data_dir<- paste0(paths$baseDir, "/global_data")
+        paths$worldDir       <- paste0(paths$global_data_dir, "/environmental_rasters");if(!file.exists(paths$worldDir)){dir.create(paths$worldDir, recursive = TRUE)}
+        paths$mapspamDir     <- paste0(paths$global_data_dir, "/MapSpam_rasters");if(!file.exists(paths$mapspamDir)){dir.create(paths$mapspamDir, recursive = TRUE)}
+        paths$aux_dir        <- paste0(paths$global_data_dir, "/auxiliar_rasters");if(!file.exists(paths$aux_dir)){dir.create(paths$aux_dir, recursive = TRUE)}
+        #paths$res_dir        <- paste0(paths$baseDir, "/results/", paths$crop);if(!file.exists(paths$res_dir)){dir.create(paths$res_dir, recursive = TRUE)}
+        
+        sendSweetAlert(
+          session = session,
+          title = "Success !!",
+          text = "The main directories were successfully created.",
+          type = "success"
+        )
+        
+        
+        updateButton(session, "create_dirs",label = "Dirs created",style = "success")
+      }else{   
+        sendSweetAlert(
+          session = session,
+          title = "Error !!",
+          text = "Please write a valid Crop or Race name.",
+          type = "error"
+        )
+      
+      }
+        
+      #update scripts
+      #input$update_scripts == "Yes"
+      if(FALSE){
+        #descargar scripts desde github
+        lists <- c( "00_config/config.R",
+                    "00_config/config_crop.R",
+                    "00_config/pre_config.R",
+                    "01_classification/.Rhistory",
+                    "01_classification/classification_function.R",
+                    "01_classification/classification_function_new_models.R",
+                    "01_classification/create_occ_shp.R",
+                    "01_classification/crop_raster.R",
+                    "01_classification/prepare_input_data.R",
+                    "02_sdm_modeling/.DS_Store",
+                    "02_sdm_modeling/.Rhistory",
+                    "02_sdm_modeling/background_points.R",
+                    "02_sdm_modeling/calibration_function.R",
+                    "02_sdm_modeling/null_model.R",
+                    "02_sdm_modeling/sdm_maxnet_approach_function.R",
+                    "02_sdm_modeling/tuning_maxNet.R",
+                    "03_gap_methods/.DS_Store",
+                    "03_gap_methods/.Rhistory",
+                    "03_gap_methods/combine_score.R",
+                    "03_gap_methods/cost_distance_function.R",
+                    "03_gap_methods/create_buffers.R",
+                    "03_gap_methods/create_png_maps.R",
+                    "03_gap_methods/delaunay.R",
+                    "03_gap_methods/delaunay_geo_score.R",
+                    "03_gap_methods/ecogeo_cluster.R",
+                    "03_gap_methods/env_distance.R",
+                    "03_gap_methods/gap_maps.R",
+                    "03_gap_methods/gaps_validation.R",
+                    "03_gap_methods/generate_report.R",
+                    "03_gap_methods/kernel_function.R",
+                    "03_gap_methods/mask_delaunay.R",
+                    "03_gap_methods/rasterbuffer_to_polygons.R",
+                    "03_gap_methods/summary_function.R",
+                    "03_gap_methods/validation_function.R",
+                    "03_gap_methods/validation_helpers.R",
+                    "03_gap_methods/validation_helpers_original.R")
+        for(i in 1:length(lists)){
+          url <- paste0("https://raw.githubusercontent.com/andresk159/Gap_analysis_UI/master/www/scripts", lists[i])
+          download.file(url,destfile = paste("www", "scripts", lists[i], sep = .Platform$file.sep))
+        }
+        sendSweetAlert(
+          session = session,
+          title = "Success !!",
+          text = "the Most updated scripts were downloaded successfully.",
+          type = "success"
+        )
+      }
+ 
+
+    }else{
+      sendSweetAlert(
+        session = session,
+        title = "Error !!",
+        text = "Please, select a valid Dir path from the Choose Dir buttom.",
+        type = "error"
+      )
+    }
+ 
+    
+  })#end boton para crear directorios y descargar scripts
+ 
+  
+  output$map_selector <- renderLeaflet({
+    leaflet("map_selector") %>% 
+      setView(lat= 0, lng = 0, zoom = 1) %>% 
+      addTiles(options = providerTileOptions(noWrap = TRUE) )%>% 
+      addPolygons(data= shp,stroke = T,color = "#4682B4", weight = 1, smoothFactor = 0.2,  #adicionar el archivo .shp al mapa y hacer que brillen cuadno son seleccionados
+                  label = ~as.character(shp@data$ISO3),
+                  layerId = shp@data$ISO3,
+                  opacity = 0.5, fillOpacity = 0.5,
+                  fillColor = "#D6DEE6",
+                  highlightOptions = highlightOptions(color = "#696262", weight = 2,
+                                                      bringToFront = F) )
+    
+  })
+  
+##*************************************************
+####  features shape selector or MASK creator ####
+#************************************************** 
+observeEvent(c(input$map_selector_shape_click, input$area_selector),{
+    proxy <- leafletProxy("map_selector")
+    
+    cont <- as.numeric(input$area_selector)
+    if(cont == 0 | cont == 8){
+      shp_custm <<- shp[shp@data$REGION != cont, ]
+      proxy %>% 
+        clearShapes() %>% 
+        addPolygons(data= shp_custm, stroke = T,color = "#2690EF", weight = 1, smoothFactor = 0.2,  #adicionar el archivo .shp al mapa y hacer que brillen cuadno son seleccionados
+                    opacity = 0.5, fillOpacity = 0.5,
+                    layerId = shp_custm@data$ISO3,
+                    fillColor = "#D6DEE6",
+                    highlightOptions = highlightOptions(color = "#696262", weight = 2,
+                                                        bringToFront = TRUE) )
+    }else{
+      shp_custm <<- shp[shp@data$REGION == cont, ]
+      proxy %>% 
+        clearShapes() %>% 
+        addPolygons(data= shp_custm, stroke = T,color = "#2690EF", weight = 1, smoothFactor = 0.2,  #adicionar el archivo .shp al mapa y hacer que brillen cuadno son seleccionados
+                    opacity = 0.5, fillOpacity = 0.5,
+                    layerId = shp_custm@data$ISO3,
+                    fillColor = "#D6DEE6",
+                    highlightOptions = highlightOptions(color = "#696262", weight = 2,
+                                                        bringToFront = TRUE) )
+    }
+    
+    
+    
+    if(as.numeric(input$area_selector) == 8){
+      
+      click <- input$map_selector_shape_click
+      # Store click IDS in reactiveValue
+      clicklist$ids <- c(clicklist$ids, click$id)
+  
+      if(any(duplicated(clicklist$ids))){
+        
+        val <- clicklist$ids[duplicated(clicklist$ids)]
+        clicklist$ids <- clicklist$ids[!clicklist$ids %in% val]
+      }
+      
+      shp_custm <<- shp[shp@data$ISO3 %in% clicklist$ids,]
+      clicklist$names <- shp_custm@data$NAME
+     
+      proxy %>% 
+        addPolygons( data= shp_custm,
+                     layerId = shp_custm@data$ISO3,
+                     color = "#444444", weight = 0.5, smoothFactor = 0.5,
+                     opacity = 1.0, fillOpacity = 0.5,
+                     fillColor ="yellow" )
+    }
+    
+  }) 
+ 
+observe({ 
+    if(as.numeric(input$area_selector) == 8){
+      updateAwesomeCheckboxGroup(session, inputId = "chk_bx_gr", label = "Countries selected:", choices = clicklist$names, selected = clicklist$names)
+   
+    }
+  })
+
+ observeEvent(input$create_mask,{
+   
+   
+   if(is.null(paths$crop)| is.null(paths$occName) | is.null(paths$baseDir)){
+     sendSweetAlert(
+       session = session,
+       title = "Error !!",
+       text = "Please, write a Crop name, Race name and select a root folder from your computer.",
+       type = "error"
+     )
+     system.time(0.5)
+     
+     updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Arrange Dirs system" )
+     
+   }else{
+   
+  
+      if(nchar(as.character(input$mask_name)) != 0){
+     paths$region <- as.character(input$mask_name)
+     
+     paths$results_dir    <- paste0(paths$baseDir, "/results/", paths$crop, "/", paths$region)
+     if(!file.exists(paths$results_dir)){dir.create(paths$results_dir, recursive = TRUE)}
+     paths$input_data_dir <- paste0(paths$results_dir, "/input_data")
+     if(!file.exists(paths$input_data_dir)){dir.create(paths$input_data_dir, recursive = TRUE)} 
+     
+     paths$mask_path <- paste(paths$input_data_dir, paste0("mask_" , paths$region, ".tif") , sep = .Platform$file.sep)
+    
+     
+     ## poner bussy indicator
+     withBusyIndicatorServer("create_mask", {
+       
+     raster("www/masks/mask_world.tif") %>% 
+       raster::crop(., y = extent(shp_custm)) %>%
+       raster::mask(., shp_custm) %>%
+       writeRaster(., paths$mask_path, overwrite = T)
+     
+       }) 
+     updateButton(session, "create_mask",label = "Mask created",style = "success")
+    
+     
+   }else{
+     sendSweetAlert(
+       session = session,
+       title = "Warning !!",
+       text = "Please,write a valid mask name.",
+       type = "warning"
+     )
+     
+   }
+ }#end else check global vars e.j paths$baseDir 
+   
+ })
+ 
+ 
+ #####import mask in case that it are already created###
+ 
+ observeEvent(input$import_mask,{
+  
+   req(input$mask_path)
+   
+   tryCatch(
+     {
+       r<- raster::raster(input$mask_path$datapath)
+       rast_name <- input$mask_path$name
+       
+       
+       if(is.null(paths$crop)| is.null(paths$occName) | is.null(paths$baseDir)){
+         sendSweetAlert(
+           session = session,
+           title = "Error !!",
+           text = "Please, write a Crop name, Race name and select a root folder from your computer.",
+           type = "error"
+         )
+         system.time(0.5)
+         
+         updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Arrange Dirs system" )
+         
+       }else{
+         
+       if(all(grepl(".tif$", rast_name), grepl("^mask_", rast_name))){ 
+         #define region rv when mask is uploaded
+         withBusyIndicatorServer("import_mask",{  
+         if(is.null(paths$region)){ reg <- gsub("^mask_|.tif$", "", rast_name)
+         paths$region <- reg
+         
+         paths$results_dir    <- paste0(paths$baseDir, "/results/", paths$crop, "/", paths$region)
+         if(!file.exists(paths$results_dir)){dir.create(paths$results_dir, recursive = TRUE)}
+         paths$input_data_dir <- paste0(paths$results_dir, "/input_data")
+         if(!file.exists(paths$input_data_dir)){dir.create(paths$input_data_dir, recursive = TRUE)} 
+         
+         paths$mask_path <- paste(paths$input_data_dir, paste0("mask_" , paths$region, ".tif") , sep = .Platform$file.sep)
+         print(paths$mask_path)
+         writeRaster(r, paths$mask_path,  overwrite = T)
+         
+         }
+       })
+         updateButton(session, "import_mask",label = "Imported",style = "success")
+         
+       }else{
+         stop(safeError("Invalid file extension (only .tif files are allowed)"))
+       }
+         
+         
+       } 
+     },
+     error = function(e) {
+       # return a safeError if a parsing error occurs
+       #stop(safeError(e))
+       sendSweetAlert(
+         session = session,
+         title = "Error !!",
+         text = "Please, Select a valid raster file.",
+         type = "error"
+       )
+     }
+   )
+   
+ })
+ 
+ 
+ 
+#*******************************************
+##### DESCARGA DE INPUT RASTER Y DEMAS  #####
+#*******************************************
+ 
+ observeEvent(input$download_data, {
+   #prevent errors when no crop name and race are defined by the user
+   if(is.null(paths$crop)| is.null(paths$occName) | is.null(paths$baseDir)){
+     sendSweetAlert(
+       session = session,
+       title = "Error !!",
+       text = "Please, write a Crop name, Race name and select a root folder from your computer.",
+       type = "error"
+     )
+     system.time(1)
+     updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Arrange Dirs system" )
+   }
+   
+   lg <- ifelse(input$download_spam == 2, TRUE, FALSE)
+   withBusyIndicatorServer("download_data", {
+   if(lg){
+     urls %>% dplyr::filter(., screen_name == as.character(input$slct_crop_name)) %>% dplyr::select(., name, download_url)  %>%  
+       apply(., 1,function(i){
+         download.file(as.character(i[2]), destfile = paste(paths$mapspamDir,  as.character(i[1]), sep  = .Platform$file.sep), mode = "wb")
+         Sys.sleep(5)
+       } )
+   }
+   
+   if(as.logical(input$download_clim) ){
+     
+     urls %>% dplyr::filter(., screen_name == "generic_rasters") %>% dplyr::select(., name, download_url)  %>%  
+       apply(., 1,function(i){
+         download.file(as.character(i[2]), destfile = paste(paths$worldDir,  as.character(i[1]), sep  = .Platform$file.sep), mode = "wb")
+         Sys.sleep(5)
+       } )
+     #download friction surface
+     if(!file.exists(paste(paths$aux_dir, "friction_surface.tif", sep = .Platform$file.sep))){
+       download.file("https://drive.google.com/uc?export=download&id=1ssBlQBtaVZw-c-ALS2iPlztYORughq6h", destfile = paste(paths$aux_dir, "friction_surface.tif", sep = .Platform$file.sep), mode = "wb")
+      
+     }
+     #download ecoregions raster
+     if(!file.exists(paste(paths$aux_dir, "World_ELU_2015_5km.tif", sep = .Platform$file.sep))){
+       download.file("https://drive.google.com/uc?export=download&id=1pdCXTej4-92VIY9sbdaiMecZNpsopsWc", destfile = paste(paths$aux_dir, "World_ELU_2015_5km.tif", sep = .Platform$file.sep), mode = "wb")
+     }
+
+     }
+   })
+   updateButton(session, "download_data",label = "Files downloaded",style = "success")
+ })
+ 
+ ### crop raster after they has been download
+ 
+ observeEvent(input$crop_rasters, {
+   
+   withBusyIndicatorServer("crop_rasters", {  
+     #prevent errors when crop name and race are NOT defined by the user
+     if(!file.exists(paths$mask_path) | is.null(paths$crop)| is.null(paths$occName) | is.null(paths$mask_path)){
+       sendSweetAlert(
+         session = session,
+         title = "Error !!",
+         text = "Please, write a Crop name, Race name and select a root folder from your computer.",
+         type = "error"
+       )
+       system.time(1)
+       updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Arrange Dirs system" )
+     }else{
+       #if conditions are acomplished then source crop raster function 
+     source(paste("www/scripts/01_classification/crop_raster.R", sep = ""), local = F)
+       #crop rasters
+     out_log <- crop_raster(mask        = paths$mask_path,
+                            global_data = paths$global_data_dir,
+                            out_path    = paths$input_data_dir)
+     
+     if(out_log == "Error"){
+       sendSweetAlert(
+         session = session,
+         title = "Error !!",
+         text = "Cropping raster process unsuccessful. Check out global rasters",
+         type = "error"
+       )
+     }
+     
+   }
+   
+   updateButton(session, "crop_rasters",label = "Rasters cropped",style = "success")
+   })
+   
+ })
+ 
+ 
+#***********************************
+#### Passport data processing ######
+#**********************************
+ 
+ 
+ bd <- reactive({
+   req(input$data_in)
+   tryCatch(
+     {
+       df.raw <- read.csv(input$data_in$datapath, header = TRUE, sep = ",") 
+       
+     },
+     error = function(e) {
+       # return a safeError if a parsing error occurs
+       return(NA)
+     }
+   )
+   return(df.raw)
+ })
+ 
+
+  output$data_prev <- renderDataTable({
+    datatable(bd() %>% dplyr::slice(., 1:20), options = list(pageLength =5, scrollX = TRUE, searching = FALSE)) %>%
+      formatStyle(columns = input$col_number, backgroundColor = "#B8D7F7")
+  })
+  
+  output$na_count <- renderValueBox({
+    valueBox(
+      paste0(bd() %>% dplyr::pull(input$col_number) %>% is.na(.) %>% sum(.)), "Missing Values", icon = icon("fas fa-question"),
+      color = "purple"
+    )
+  }) 
+  output$total_records <- renderValueBox({
+    valueBox(
+      paste0(bd() %>% nrow(.)), "Rows", icon = icon("fas fa-bars")
+     
+    )
+  }) 
+  output$na_percent <- renderValueBox({
+    x <- (bd() %>% dplyr::pull(input$col_number) %>% is.na(.) %>% sum(.))/ nrow(bd())
+    x <- round(x,3)*100
+    color <- ifelse(x <= 30, "green", ifelse(x<= 75, "yellow", ifelse(x > 75, "red", "NA")))
+    valueBox(
+      paste0(x, "%" ), "Missing Values", icon = icon("fas fa-percentage"),
+      color = color
+    )
+  }) 
+  # change tab when do.ensemble is set to TRUE
+  observeEvent(input$do_ensemble_models, {
+    if(input$do_ensemble_models){
+      updateTabsetPanel(session, inputId = "tab_passport", selected = "Parameters" )
+    }
+   })
+  # change tab when data is loaded
+  observeEvent(input$data_in,{
+    updateTabsetPanel(session, inputId = "tab_passport", selected = "Preview data" )
+  })
+#### boton para procesar la base de datos
+  observeEvent(input$prepare_data, {
+    
+    #prevent errors when no crop name and race are defined by the user
+    if(is.null(paths$crop)| is.null(paths$occName) | is.null(paths$baseDir)){
+      sendSweetAlert(
+        session = session,
+        title = "Error !!",
+        text = "Please, write a Crop name, Race name and select a root folder from your computer.",
+        type = "error"
+      )
+      system.time(1)
+      updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Arrange Dirs system" )
+    }else if(is.null(paths$region)){
+      endSweetAlert(
+        session = session,
+        title = "Error !!",
+        text = "Please, import a valid region raster mask..",
+        type = "error"
+      )
+      system.time(1)
+      updateNavbarPage(session, inputId = "nvpage_tab1", selected = "Define study area" )
+    }
+    
+   withBusyIndicatorServer("prepare_data", {
+     
+     req(input$data_in)
+     print(object.size(clim_layer()), units = "MB")
+     source(paste("www/scripts/01_classification/classification_function.R", sep = ""), local = F)
+     source(paste("www/scripts/01_classification/prepare_input_data.R", sep = ""), local = F)
+    tryCatch({
+     
+      resources$cleaned_data <- prepare_input_data(data_path = input$data_in$datapath,
+                                      col_number = input$col_number,
+                                      mask = paths$mask_path,
+                                      env_rasts = clim_layer())
+      
+      write.csv(resources$cleaned_data,   paths$bd_file, row.names = F)
+      
+      
+      updateButton(session, "prepare_data",label = "Database consolidated",style = "success")
+      updateTabsetPanel(session, inputId = "tab_passport", selected = "Results" )
+      
+      
+    }, error = function(e){
+      
+      sendSweetAlert(
+        session = session,
+        title = "Error !!",
+        text = paste("Cleaning database process failed \n", e),
+        type = "error"
+      )
+      
+    })
+    
+    })
+    
+    
+    output$data_out <-  renderDT({
+      req(paths$bd_file)
+      if(file.exists(paths$bd_file)){
+        resources$cleaned_data <- read.csv(paths$bd_file, header =T, stringsAsFactors = F)
+      }
+      
+      datatable(resources$cleaned_data, options = list(pageLength =5, scrollX = TRUE, searching = FALSE)) 
+    })
+    
+    
+    output$infbox <- renderUI({
+      
+  list(
+    fluidRow(
+      valueBox(value =  nrow(resources$cleaned_data),
+               subtitle = "Valid records",
+               icon     = icon("fas fa-bars"),
+               color    = "aqua",
+               width    = 9)
+    ),
+    fluidRow(
+             valueBox( value = ncol(resources$cleaned_data)-4,
+                       subtitle = "Variables",
+                       icon     = icon("fas fa-crosshairs"),
+                       color    = "light-blue",
+                       width    = 9) 
+    )
+      )
+      
+    
+      
+    })
+    
+    output$gchart1 <- renderGvis({
+      gvisPieChart(resources$cleaned_data %>% dplyr::group_by(ensemble) %>% count(),
+                   options = list(is3D = "true",
+                                  width=400,
+                                  height=300,
+                                  title = "Classes counts"))
+    })
+    
+    output$lmap1 <- renderLeaflet({
+      
+      dt <- resources$cleaned_data %>% 
+        dplyr::select(ensemble:Longitude) 
+      pp<- dt
+      coordinates(pp) <- ~Latitude+Longitude
+      crs(pp) <- coor_sys
+      bbx <- pp@bbox
+      cent <- as.numeric(rowSums(bbx)/2)
+      pal <- colorFactor(palette = "Set1", domain = unique(dt$ensemble))
+      
+      leaflet("lmap1") %>% 
+        setView(lat= cent[1], lng = cent[2], zoom = 3) %>% 
+        addTiles(options = providerTileOptions(noWrap = TRUE) )%>% 
+      addCircles(data = dt, 
+                 radius =  ~rep(20000, nrow(dt)),
+                 color = ~pal(ensemble), 
+                 stroke = F, 
+                 fillOpacity = 0.8,
+                 label = ~as.character(ensemble)) %>%
+        addLegend(data = dt, 
+                  position = "bottomright", 
+                  colors = ~pal(unique(ensemble)), 
+                  labels = ~factor(unique(ensemble)),
+                  title = "Class names",
+                  opacity = 0.8)
+    })
+    
+    output$pca_res <- renderPlot({
+      
+      bd <- resources$cleaned_data %>% 
+        dplyr::mutate(., ensemble = as.factor(ensemble)) %>%
+        dplyr::select(., -starts_with("long"), -starts_with("lat"), -contains("status"))
+      
+      pca <- FactoMineR::PCA(bd[, -1], scale.unit = TRUE, ncp = 3, graph = FALSE)
+      df_pca <- data.frame(  pca$ind$coord[, c(1,2)], class = bd$ensemble)
+      
+      p <- ggplot(data = df_pca, aes(x = Dim.1, y = Dim.2, color = class)) +
+        geom_point() + 
+        stat_ellipse(geom="polygon", aes(fill = class), alpha = 0.2, show.legend = FALSE, level = 0.95) +
+        geom_hline(yintercept = 0, lty = 2)+
+        geom_vline(xintercept = 0, lty = 2)+
+        xlab(paste("PC1 (", round(pca$eig[,2],1)[1], "%)")) + 
+        ylab(paste("PC2 (", round(pca$eig[,2],1)[2], "%)")) +
+        theme_minimal() +
+        theme(panel.grid = element_blank(),
+              panel.border = element_rect(fill= "transparent"))
+      
+      p
+      
+      
+    }, res = 100)
+    
+    
+    
+
+  })
+  
+#**********************************  
+##### cost distance Function ####
+#********************************
+  observeEvent(input$calculate_cost,{
+    
+    withBusyIndicatorServer("calculate_cost", { 
+    create_occ_shp(file_path   = input$occ_in$datapath,
+                   file_output = paste0(occDir,"/Occ.shp"),
+                   validation  = FALSE)
+    
+    # Cost distance process according with the level of analysis
+    cost_dist_function(
+      outDir       = gap_outDir,
+      friction     = input$friction_in$datapath,
+      mask         = mask,
+      occDir       = occDir,
+      arcgis       = FALSE,
+      code         = paste0(sp_Dir_input, "/cost_dist.py")
+    )
+    
+    })
+    updateButton(session, "calculate_cost",label = "Raster calculated",style = "success")
+    
+   
+    output$out_1 <- renderPlot({
+      shp_ctm <- shp[shp@data$NAME != "Antarctica",] %>% raster::crop(., y = extent(raster(paste0(gap_outDir,"/cost_dist.tif")) ))
+      
+      ggplot() +
+        geom_raster(data = raster(paste0(gap_outDir,"/cost_dist.tif")) %>% as.data.frame(., xy =T) %>% dplyr::filter(., !is.na(cost_dist)), aes(x = x, y = y, fill = cost_dist)) +
+        coord_equal() +
+        scale_fill_continuous(type = "viridis")+ 
+        geom_polygon(data=shp_ctm, aes(x=long, y=lat, group=group),fill=NA,color="black", size=0.7)+
+        geom_point(data = shapefile(paste0(occDir,"/Occ.shp")) %>% as.data.frame(),mapping =  aes(x = coords.x1 , y = coords.x2, color = "red"))+
+        theme_dark() +
+        xlab("") +
+        ylab("") 
+        #theme(legend.position = "none")+
+        
+    
+    })
+    
+  })
+  
+
+  #******************************
+  ######### SDM MODELLING ########
+  #******************************
+  
+  ## check if occ file exists
+  
+  output$occ_exists <- renderUI({
+    tags$div(id = "occ_status", style = " 
+             width: 100%;
+             padding: 12px 20px;
+             margin: 4px 0;
+             display: inline-block;
+             border: 1px solid #ccc;
+             border-radius: 4px;
+             box-sizing: border-box;
+             background-color: #D7D7D7;",
+             HTML(ifelse(file.exists(paste(classResults, paste0(crop, "_lvl_1_bd.csv"), sep = .Platform$file.sep)), 
+                         paste("<p>Database  <font color = 'green'><strong> is already created</strong> </font></p>") , 
+                         paste("<p>Database  <font color = 'red'><strong>  not exists</strong> </font></p>"))
+    ))
+    
+  })
+  
+  
+observeEvent(input$create_pseudo, {
+  
+  withBusyIndicatorServer("create_pseudo", { 
+    
+    .GlobalEnv$var_names   <- model_driver(sp_Dir      = sp_Dir,
+                                           mask        = mask,
+                                           occName     = occName,
+                                           extension_r = ".tif",
+                                           all         = F,
+                                           overwrite   = T,
+                                           clsModel    = "ensemble",
+                                           correlation = 1,#input$cor_method,# 1. Correlation, 2. VIF, 3. PCA + VIF
+                                           pa_method = "all_area"#input$pseudo_method
+    )
+ 
+    .GlobalEnv$spData <- read.csv(paste0(swdDir, "/swd_", occName, ".csv"))
+    
+    })
+  updateButton(session, "create_pseudo",label = "File created",style = "success")
+  
+  
+})
+  
+  output$map2 <- renderLeaflet({
+    
+    req(spData)
+    
+    pal <- colorFactor(c("red", "blue"), domain = spData$status)
+    leaflet(data = spData ) %>% addTiles() %>% addCircles(., 
+                                                          lng = ~lon, 
+                                                          lat = ~lat , 
+                                                          color = ~pal(status), 
+                                                          fillOpacity = 1, 
+                                                          radius = 10000,
+                                                          stroke = F,
+                                                          group =   "pse") %>%
+      addLegend(color = c("red", "blue"), 
+                labels = c("Pseudo-absences", "Occurrences"), 
+                group = "pse", 
+                position = "bottomleft")
+    
+  })
+  
+  
+  
+  ##### SDM MODEL : MAXENT MODEL SECIFICATIONS ###############33
+  
+  observe({
+    req(input$feat)
+    print(paste(input$feat, collapse = ""))
+  })
+  
+}#end everything
+
+
+
+
+
+
+
+
+
+

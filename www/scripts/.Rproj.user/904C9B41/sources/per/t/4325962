@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1571152942396.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3743321090",
+    "id" : "4325962",
+    "lastKnownWriteTime" : 1571173391,
+    "last_content_update" : 1571173391398,
+    "path" : "D:/Gap_analysis_UI/www/scripts/01_classification/classification_function.R",
+    "project_path" : "01_classification/classification_function.R",
+    "properties" : {
+        "cursorPosition" : "176,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

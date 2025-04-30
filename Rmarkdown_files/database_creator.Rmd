@@ -1,0 +1,22 @@
+---
+title: "data_Base_creator"
+output: html_document
+---
+
+
+### **Database set up Assistant**
+
+*The assistant will support you to select, clean, and standardize your database (passport data) to a specific format supported by this application.*
+
+***
+
+**Important aspects:**
+
+* The database (passport data) need three or 4 columns specifying: races, latitude and longitude, and an optional column with the type of accession (H for Herbarium accession and G for Germplasm accessions).
+
+
+* The only file type supported in this app is a CSV (comma separated values) format, once you have upload a valid file itn can be previewed below.
+
+* Final output: CSV file with the class names, latitude, longitude and, all variables extracted from the raster files mentioned in *"Download input"*. Stored in 
+**.../results/*"crop\_name"*/"region\_name"/input\_data/"crop\_name\_lvl\_1\_bd.csv"**
+

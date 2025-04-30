@@ -1,0 +1,15 @@
+---
+title: "mask_creator"
+output: html_document
+---
+
+### **Geographic area selector wizard** 
+
+*the wizard will support you to define the strategic areas/regions to analyze.*  
+
+***
+
+Select a pre-defined continental mask from the, **"Region Menu"** or create a customized geographic area clicking over the countries in the map. Finally set a name for the defined region.  
+
+**file output: input_data/"mask\_name".tif**
+

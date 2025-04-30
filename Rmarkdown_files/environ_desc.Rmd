@@ -1,0 +1,18 @@
+---
+title: "environ_description"
+output: html_document
+---
+  
+  ### **Calculate Environmental geo score**
+  
+  ***
+  
+Environmental gap score  is calculated for each 2.5-arc-minute pixel in the distribution model by conducting a hierarchical clustering analysis using Ward’s method with all the predictor variables from the distribution modelling. The Mahalanobis distance between each pixel and the environmentally closest genebank accession occurrence location was then computed. Environmental distance scores were normalized between 0 and 1. A high environmental gap score value for a pixel reflects a large distance to areas with similar environments where landraces have previously been collected for genebank conservation and, thus, represents a higher probability of the pixel location being a gap in existing ex situ collections.
+
+<img src="../Rmarkdown_files/imgs/environ_map.png" alt="Environmental gap score" width="50%" height="60%" style="display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: '50%';" >
+  
+  
+  

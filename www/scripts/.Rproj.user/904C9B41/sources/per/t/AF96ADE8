@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1572260984569.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "579013846",
+    "id" : "AF96ADE8",
+    "lastKnownWriteTime" : 1575904131,
+    "last_content_update" : 1575904131,
+    "path" : "C:/Users/acmendez/Google Drive/R_SCRIPTS/some_lines.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "962,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 11,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1571153269236.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2108203393",
+    "id" : "AD4C486",
+    "lastKnownWriteTime" : 1571340415,
+    "last_content_update" : 1571340415787,
+    "path" : "D:/Gap_analysis_UI/www/scripts/01_classification/prepare_input_data.R",
+    "project_path" : "01_classification/prepare_input_data.R",
+    "properties" : {
+        "cursorPosition" : "68,17",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

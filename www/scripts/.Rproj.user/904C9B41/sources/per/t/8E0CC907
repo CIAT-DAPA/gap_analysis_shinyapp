@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1566317998559.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3338192833",
+    "id" : "8E0CC907",
+    "lastKnownWriteTime" : 1566420425,
+    "last_content_update" : 1566420425502,
+    "path" : "D:/Gap_analysis_UI/www/scripts/00_config/config.R",
+    "project_path" : "00_config/config.R",
+    "properties" : {
+        "cursorPosition" : "56,40",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

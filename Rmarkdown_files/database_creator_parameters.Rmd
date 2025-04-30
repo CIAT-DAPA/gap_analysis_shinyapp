@@ -1,0 +1,25 @@
+---
+title: "datbase_creator_parameters"
+output: html_document
+---
+
+### **Parameters Especification**
+
+***
+
+**Function Parameters description:**
+
+1. __Select .csv database:__ Select from your computer a valid csv file with passport data (only CSV files are supported).
+2. __Select region raster mask:__ Select from your computer the raster mask created before (usually it has to be found in: "results/"region\_name"/"crop\_name"/input\_data/mask/" folder).
+3. __write the column number of race variable:__ Tell to the app the column number where crop races or structure is defined.
+4. __Should we Train ensemble models:__  If is for your interest to train models in order to detect trends between drivers please select "Yes" 
+                                          and a serie of ensemble models parameters will be deployed, otherwise select "No".
+5. __Should we predict Missing Accessions Classes:__ If your database has missing accessions this function allow you to predict those accession without class information.
+6. __Should we use Latitude to train models:__ For some crops the latitude is an indicator for suitability and this could be important for the models ensemble performance, if it is the case then select "Yes". If not then please select "No".
+7. __Should we use Longitude to train models:__ For some crops the longitude is an indicator for suitability and this could be important for the models ensemble performance, if it is the case then select "Yes". If not then please select "No".
+8. __If data is unbalance, select one sampling method:__ For the models is very important that the amount of data per class being approximately equal if not, the models performance might be affected. To deal with these issues the function allows choosing a sampling method to balance the data.
+
+
+
+                                                       
+

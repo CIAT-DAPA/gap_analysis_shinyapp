@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1569267708313.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "405967932",
+    "id" : "93467880",
+    "lastKnownWriteTime" : 1569341802,
+    "last_content_update" : 1569341802828,
+    "path" : "D:/Gap_analysis_UI/www/scripts/01_classification/crop_raster.R",
+    "project_path" : "01_classification/crop_raster.R",
+    "properties" : {
+        "cursorPosition" : "30,28",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 16,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

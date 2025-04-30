@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1566317976185.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2081595173",
+    "id" : "D55A10BD",
+    "lastKnownWriteTime" : 1565637012,
+    "last_content_update" : 1565637012,
+    "path" : "D:/Gap_analysis_UI/www/scripts/master_code_documented.R",
+    "project_path" : "master_code_documented.R",
+    "properties" : {
+        "cursorPosition" : "18,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

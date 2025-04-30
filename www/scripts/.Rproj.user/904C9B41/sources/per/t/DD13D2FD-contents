@@ -1,0 +1,88 @@
+pacman::p_load(tidyverse, rtweet,httr, jsonlite, geojson, geojsonlint, httpuv, stringr, rvest, RSelenium, 
+               udpipe,quanteda, lubridate, bit64, stringdist, magrittr, wordcloud, lattice )
+
+pkey <- "9291d82367mshfa5bfd9bbe7c50ap1ce87djsnc441dfa7e680"
+
+phost <- "opencage-geocoder.p.rapidapi.com"
+op_cg_key <- "01eb252d647a448fa19d3fcaef9762bc"
+
+#path parameter
+
+ppath <- "/lang/es" 
+country_iso_2 <- "co" 
+endpoint <- paste0("https://", phost,"/geocode/v1/json?")
+
+
+data <- read.csv("C:/Users/acmendez/Google Drive/TRABAJOS UNIVALLE/dengue_2017.csv", header = T, stringsAsFactors = FALSE)
+to_geolocate <- data %>% dplyr::filter(nom_est_f_caso != "Probable") %>%
+  dplyr::filter(!duplicated(Municipio)) %>%
+  dplyr::mutate_all(.funs = str_to_lower) %>%
+  dplyr::mutate(Departamento = str_replace(Departamento, pattern = "valle", replacement = "valle del cauca")) %>%
+  dplyr::filter(!grepl(pattern = "\\*( |[a-z]*)", Municipio)) %>%  
+  dplyr::filter(!grepl(pattern = "exterior_[a-z]*", Municipio)) %>%
+  dplyr::mutate(Municipio = str_replace(Municipio, pattern = "\\([a-z]*\\)", replacement = "") ) %>%
+  dplyr::mutate(address = paste(Municipio, Departamento, "Colombia", sep = ", "))
+
+to_geolocate$lat <- NA
+to_geolocate$lon <- NA
+to_geolocate$uncertainty <- NA
+
+log <- c("ok")
+
+for(i in 1:nrow(to_geolocate)){
+ 
+  if(any(rle(log)$lengths[rle(log)$value == "error"] >= 10)){
+    brerak()
+  }
+  
+  query <- "itagui, antioquia, Colombia"#to_geolocate[i, "address"]
+  cat("Geolocating:", query, " record", i, "/", nrow(to_geolocate),"\n")
+  
+  #creando el http
+  
+  request <- paste0(endpoint,  
+                    "language=en&key=", op_cg_key, 
+                    "&q=", query, 
+                    "&roadinfo=0",
+                    "&countrycode=", country_iso_2)
+  http <- URLencode(request)
+  #ejecutamos el request usando el metodo GET
+  tryCatch({
+    
+    response <- GET(http, 
+                    add_headers("X-RapidAPI-Host" = phost,
+                                "X-RapidAPI-Key" = pkey))
+    text <- content(response, as = "text", encoding = "UTF-8")
+    #efectuando el parsing del formato JSON usando jsonlite
+    coords <- fromJSON(text, flatten =T , simplifyMatrix = T)
+    results <- coords$results %>% 
+      dplyr::mutate_all(.funs = str_to_lower) %>%
+      dplyr::filter(components._type == "city" | components._type == "county" | components._type == "village" ) %>%
+      dplyr::filter(components.state == to_geolocate[i, "Departamento"]) %>%
+      dplyr::filter(components.county == to_geolocate[i, "Municipio"]) %>%
+      dplyr::filter(confidence == max(confidence, na.rm =T)) %>%
+      dplyr::slice(which.max(confidence))
+    
+    to_geolocate[i, "lat"] <- results$geometry.lat
+    to_geolocate[i, "lon"] <- results$geometry.lng
+    to_geolocate[i, "uncertainty"] <- results$confidence 
+    log[i] <- "ok"
+    
+  }, error = function(e){
+    print("houston presentamos problemas")
+    log[i] <- "error"
+    to_geolocate[i, "lat"] <- NA
+    to_geolocate[i, "lon"] <- NA
+    to_geolocate[i, "uncertainty"] <- NA 
+  })
+  
+  
+  Sys.sleep(2.5)
+  }
+
+
+write.csv(to_geolocate, "C:/Users/acmendez/Google Drive/TRABAJOS UNIVALLE/dengue_georreferenciado_2017.csv", row.names = FALSE)
+results <- coords$results 
+
+coords$results$bounds
+coords$results$confidence

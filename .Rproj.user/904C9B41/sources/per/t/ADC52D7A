@@ -1,0 +1,26 @@
+{
+    "id": "ADC52D7A",
+    "path": "D:/gap_analysis_shinyapps/server.R",
+    "project_path": "server.R",
+    "type": "r_source",
+    "hash": "3220434808",
+    "contents": "",
+    "dirty": false,
+    "created": 1668200390962.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "1903,49",
+        "scrollLine": "1895"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1668277141,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1668277141507,
+    "read_only": false,
+    "read_only_alternatives": []
+}

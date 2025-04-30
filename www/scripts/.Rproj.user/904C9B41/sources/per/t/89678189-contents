@@ -1,0 +1,40 @@
+##############
+# script para procesar las redes  de la PPA
+# author: Andres camilo mendez
+# author2: carlos gonzales
+
+library(pacman)
+pacman::p_load(tidyverse, dplyr, igraph, statnet )
+
+actores <- read.csv("Y:/PPA-SNA/input_data/actores_ppa/listado_empresas_A_2.csv")
+
+ties_invest <- read.delim("clipboard", header = F, stringsAsFactors = F)
+df <- ties_invest %>% mutate(c_names = gsub("[0-9]+\\. ", "", V1), V1 = NULL) %>% 
+  dplyr::filter(V2 == "Sim")
+
+edges <- data.frame(source = rep("IDESAM", nrow(df)), target = df$c_names, weigth = rep(1, nrow(df)))
+
+nodes <- data.frame(name = c("IDESAM", df$c_names), id = 1:(nrow(df)+1))
+
+g <- graph_from_data_frame(d=edges, vertices=nodes, directed=FALSE)
+
+plot(g)
+
+
+
+ties_ct <- read.delim("clipboard", header = F, stringsAsFactors = F)
+df_ct <- ties_ct %>% mutate(c_names = gsub("[0-9]+\\. ", "", V1), V1 = NULL) 
+
+edges_ct <- data.frame(source = rep("IDESAM", nrow(df_ct)), target = df_ct$c_names, weigth = rep(1, nrow(df_ct)))
+
+nodes_ct <- data.frame(name = c("IDESAM", df_ct$c_names), id = 1:(nrow(df_ct)+1))
+
+g <- graph_from_data_frame(d=edges_ct, vertices=nodes_ct, directed=FALSE)
+
+V(g)$color <- NA
+V(g)$color[V(g)$name %in% df_ct[df_ct$V2 == "Sim", "c_names"] ] <- "red"
+V(g)$color[V(g)$name %in% df_ct[df_ct$V2 == "Não" | df_ct$V2 == "não", "c_names"] ] <- "gold"
+V(g)$color[V(g)$name %in% "IDESAM" ] <- "yellow"
+plot(g)
+legend("bottomleft", legend=c("PPA contexto", "Não PPA contexto", "IDESAM"), 
+       pch=21, pt.bg=c("red", "gold", "yellow"), pt.cex=2, bty="n")

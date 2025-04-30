@@ -1,0 +1,10 @@
+---
+  title: "arrange dir system"
+output: html_document
+---
+  
+### ***Pseudo-absences generator function***
+
+Aiming to determine the spatial distribution of the landrace group, the model need some points(locations, coordinates) from where to compare against the occurrences. Such points are known as pseudo-absences and are chosen randomly, they have to encompass a wide variety of environments over the extent.
+
+This Function implements two different methods to select points randomly over the geographic area, and also to extract the values from the variables(Crop diversity drivers) and compile them into a single CSV file. After generating all pesudo-absences the correlation between crop diversity drivers is evaluated and the most correlated variables will be removed in order to avoid model multicolinearity problems.

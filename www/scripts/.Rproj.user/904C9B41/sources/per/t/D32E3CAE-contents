@@ -1,0 +1,309 @@
+install.packages("shiny"); library(shiny)
+
+
+
+####################################
+### Aplicacion basica #############
+###################################
+
+n <- 200
+
+
+# Define the server code
+logInit <- function() {
+  intro <- '***WELCOME TO WALLACE***'
+  brk <- paste(rep('------', 14), collapse='')
+  expl <- 'Please find messages for the user in this log window.'
+  return(c(paste(intro, brk, expl, brk, sep='<br>')))
+}
+
+writeLog <- function(mp, ..., type = 'default') {
+  if (type == "default") {
+    pre <- "> "
+  } else if (type == 'error') {
+    pre <- '<font color="red"><b>! ERROR</b></font> : '
+  } else if (type == 'warning') {
+    pre <- '<font color="orange"><b>! WARNING</b></font> : '
+  }
+  
+  args <- list(pre, ...)
+  newEntries <- paste(args, collapse = ' ')
+  isolate({mp$logs <- paste(mp$logs, newEntries, sep = '<br>')})
+}
+
+# Define the UI
+ui <- bootstrapPage(
+  div(id = "wallaceLog", htmlOutput("log")),
+  bsButton("btn1", "press me")
+  
+)
+
+
+server <- function(input, output, session) {
+  rvs <- reactiveValues(logs = logInit())
+  
+  output$log <- renderUI({tags$div(id='logHeader', tags$div(id='logContent', 
+                                                            HTML(paste0(rvs$logs, "<br>", collapse = ""))))})
+  
+  observeEvent(input$btn1,{
+    for(i in 1:10){
+      x <- paste("como la ostia:" , input$btn1, "---", i, "\n")
+      writeLog(rvs,  x)
+      Sys.sleep(10)
+    }
+    
+    
+  })
+ 
+}
+
+# Return a Shiny app object
+shinyApp(ui = ui, server = server)
+
+
+
+###################################
+### Agregando un poco de estilo####
+###################################
+
+
+ui <- bootstrapPage(
+  sliderInput(inputId = 'n', 'Number of obs', min = 10, max = n, value = 100 ),
+  numericInput(inputId = "min", "runif min parameter", value = 0),
+  numericInput(inputId = "max", "runif max parameter", value = 1),
+  textInput(inputId ="txt1", "textInput", value= "Hi mom"),
+  selectInput(inputId ="menu1", label = "Select an X-axis name:", choices = c("Eje X",
+                                                                    "X Axis",
+                                                                    "Runif values",
+                                                                    "etc"), selected = "etc" ),
+  radioButtons(inputId = "rbtn1", "Select an Y-axis name:", choices = c("Eje Y",
+                                                              "Frecuency",
+                                                              "Density",
+                                                              "Other name"), selected = "Eje Y"),
+  tags$a(href="https://shiny.rstudio.com/articles/tag-glossary.html", "Algunas funciones HTML bastantes interesantes"),
+  plotOutput('plot')
+  
+)
+
+
+# Define the server code
+server <- function(input, output) {
+  output$plot <- renderPlot({
+    hist(runif(n = input$n, min = input$min, max = input$max ), 
+         col = "red", 
+         main = paste("Histogram of ", input$txt1),
+         xlab = input$menu1,
+         ylab = input$rbtn1)
+  })
+}
+
+# Return a Shiny app object
+shinyApp(ui = ui, server = server)
+
+
+###################################
+### Usando otro tipo de UI     ####
+###################################
+
+ui <- fluidPage(
+  titlePanel(tags$h3("Parameters")),
+  sidebarLayout(
+    sidebarPanel(  
+                  sliderInput(inputId = 'n', 'Number of obs', min = 10, max = n, value = 100 ),
+                  numericInput(inputId = "min", "runif min parameter", value = 0),
+                  numericInput(inputId = "max", "runif max parameter", value = 1),
+                  textInput(inputId ="txt1", "textInput", value= "Hi mom"),
+                  selectInput(inputId ="menu1", label = "Select an X-axis name:", choices = c("Eje X",
+                                                                                              "X Axis",
+                                                                                              "Runif values",
+                                                                                              "etc"), selected = "etc" ),
+                  radioButtons(inputId = "rbtn1", "Select an Y-axis name:", choices = c("Eje Y",
+                                                                                        "Frecuency",
+                                                                                        "Density",
+                                                                                        "Other name"), selected = "Eje Y"),
+                  tags$a(href="https://shiny.rstudio.com/articles/tag-glossary.html", "Algunas funciones HTML bastantes interesantes")
+    ),
+    mainPanel(
+      plotOutput('plot'),
+      renderDataTable("table1")
+    )
+  )
+) 
+
+
+
+# Define the server code
+server <- function(input, output) {
+ 
+  output$plot <- renderPlot({
+    hist(runif(n = input$n, min = input$min, max = input$max ), 
+         col = "red", 
+         main = paste("Histogram of ", input$txt1),
+         xlab = input$menu1,
+         ylab = input$rbtn1)
+  })
+  
+}
+
+shinyApp(ui = ui, server = server)
+
+#########################################
+### Trabajando con eventos reactivos####
+###          OBSERVE                ####
+#########################################
+
+
+n <- 200
+
+# Define the UI
+ui <- bootstrapPage(
+  numericInput(inputId= 'n', label = 'Number of obs', n),
+  actionButton(inputId = "btn", label = "calculate"),
+  plotOutput('plot')
+)
+
+
+# Define the server code
+server <- function(input, output) {
+
+  
+  
+
+ 
+  observe(
+   print(c(input$btn, input$n))
+   
+  )
+  
+  observe(
+    if(input$btn >= 5){
+      showModal(modalDialog(title = "Warning message:",
+                            paste("usted ha presionado el boton mas de", input$btn, " veces"  )
+      ))
+    } 
+    
+  )
+  
+  # no se puede asignar variables usando un observe
+  n.clicks <- observe(
+    input$btn
+  ) 
+  
+  observe(
+    #if(input$btn != 0){}
+      output$plot <- renderPlot({
+        hist(runif(input$n))
+      })  
+
+  )
+  
+   
+}
+
+# Return a Shiny app object
+shinyApp(ui = ui, server = server)
+
+
+#########################################
+### Trabajando con eventos reactivos####
+###          REACTIVE               ####
+########################################
+
+server <- function(input, output) {
+  
+  
+  # Usando la funcion reactive si se puede asignar variables
+  n.clicks <- reactive(
+    input$btn
+  ) 
+  
+  observe(
+  
+    print( n.clicks() )
+    
+  )
+  
+ h<- reactive(
+    if(input$btn != 0 ){ 
+        hist(runif(input$n))
+      #se puede solucionar si usamos isolate sobre input$n
+      }
+  )
+  
+ output$plot <- renderPlot({
+   h()
+ })  
+ 
+  
+  
+}
+
+# Return a Shiny app object
+shinyApp(ui = ui, server = server)
+
+#########################################
+### Trabajando con eventos reactivos####
+###          eventReactive          ####
+########################################
+
+
+server <- function(input, output) {
+  
+  
+h <- eventReactive(input$btn, {
+  
+  hist(runif(input$n))
+   
+ })
+ 
+output$plot <- renderPlot({
+  h()
+})  
+  
+  
+}
+
+# Return a Shiny app object
+shinyApp(ui = ui, server = server)
+
+#########################################
+### Trabajando con eventos reactivos####
+###          observeEvent           ####
+########################################
+
+
+server <- function(input, output) {
+  
+  
+  observeEvent(input$btn, {
+    
+    output$plot <- renderPlot({
+      hist(runif(isolate(input$n)))
+      # se puede arreglar con Isolate
+    })
+    
+  })
+  
+}
+
+# Return a Shiny app object
+shinyApp(ui = ui, server = server)
+
+#8888888888888
+#######juuuum#######
+
+
+data <- read.delim("clipboard", header = F, stringsAsFactors = F)
+
+n1 <- 107	
+n2 <- 249
+
+x <- as.numeric(data[1,2:3])/100
+
+x1 <- data[1,2]
+x2 <- data[1,3]
+
+prop.test(x = round(x*c(n1, n2),0), n = c(n1, n2))
+
+prop.test()
+

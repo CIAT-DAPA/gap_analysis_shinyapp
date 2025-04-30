@@ -1,0 +1,26 @@
+{
+    "id": "3B1E6888",
+    "path": "D:/gap_analysis_shinyapps/www/scripts/02_sdm_modeling/sdm_maxent_java_approach_function.R",
+    "project_path": "www/scripts/02_sdm_modeling/sdm_maxent_java_approach_function.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1677608272386.0,
+    "source_on_save": false,
+    "relative_order": 12,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "17,29",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1666787067,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1666787067,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1567181237568.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3479641213",
+    "id" : "435E851E",
+    "lastKnownWriteTime" : 1567521265,
+    "last_content_update" : 1567521265880,
+    "path" : "Y:/PPA-SNA/scripts/news_scrapping.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "50,3",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 15,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

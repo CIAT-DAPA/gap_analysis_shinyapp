@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1566400146342.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3378071337",
+    "id" : "9E6FBA62",
+    "lastKnownWriteTime" : 1565622204,
+    "last_content_update" : 1565622204,
+    "path" : "D:/Gap_analysis_UI/www/scripts/02_sdm_modeling/sdm_maxnet_approach_function.R",
+    "project_path" : "02_sdm_modeling/sdm_maxnet_approach_function.R",
+    "properties" : {
+        "cursorPosition" : "211,85",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 12,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

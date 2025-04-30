@@ -1,0 +1,468 @@
+#
+# This is the user-interface definition of a Shiny web application. You can
+# run the application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+# 
+#    http://shiny.rstudio.com/
+#
+
+library(pacman)
+pacman::p_load(shiny, shinydashboard, leaflet, raster, rgdal, rgeos, sp, rsconnect, ggplot2, 
+               shinyFiles, shinyBS, shinyjs, yaml, shinyWidgets, rmarkdown, bsplus, tidyverse, shinydashboardPlus, DT )
+# Define UI for application that draws a histogram
+urls <- read.csv("www/downloadable_files.csv")
+source("www/helpers.R", local = TRUE)
+
+short_info <- function(input, title, place){
+  input %>% shinyInput_label_embed(shiny_iconlink() %>% bs_embed_tooltip( title = title, placement = place))
+}
+
+header <- dashboardHeaderPlus(
+  title = "Gap analysis UI",
+  dropdownMenuOutput("messageMenu"),
+  dropdownMenuOutput("restoreSession")
+  # tags$li(a(href = 'http://shinyapps.company.com',
+  #           icon("power-off"),
+  #           title = "Back to Apps Home"),
+  #         class = "dropdown")
+)
+
+sidebar <- dashboardSidebar(
+              sidebarMenu(id = "menu", 
+                           menuItem(" Introduction", tabName = "intro", icon = icon("far fa-sun"), selected = T),
+                           menuItem(" Assistants", tabName = "tab1", icon = icon("far fa-cogs")),
+                           menuItem(" Cost Distance", tabName = "tab2", icon = icon("fab fa-contao")),
+                           menuItem(" SDM", tabName = "tab3", icon = icon("fas fa-globe-americas"))
+              ) 
+                           
+                           )
+body <- dashboardBody(uiOutput("modal1"),
+  tabItems(
+    tabItem(tabName = "intro", tags$html('<p> Nothing to see here now </p>') ,
+            tags$head(HTML("<style> .well{
+                        border: 1px solid rgb(45, 152, 214);
+                        position: relative;
+                        border-radius: 3px;
+                        background: #ffffff;
+                        border-top: 4px solid #3F89B8;
+                        margin-bottom: 20px;
+                        width: 100%;
+                        box-shadow: 0 1px 1px rgba(0,0,0,.1);}
+
+            .modal-content {
+                           position: relative;
+                           background-color: #fff;
+                           -webkit-background-clip: padding-box;
+                           background-clip: padding-box;
+                           border: 1px solid #999;
+                           border: 1px solid rgba(0,0,0,.2);
+                           border-radius: 6px;
+                           outline: 0;
+                           -webkit-box-shadow: 0 3px 9px rgba(0,0,0,.5);
+                           box-shadow: 0 3px 9px rgba(0,0,0,.5);
+                           }
+                 </style>"))
+            
+            
+    ),
+    tabItem(tabName = "tab1", 
+            use_bs_tooltip(),
+            use_bs_popover(),
+            withMathJax(),
+            navbarPage(title = icon("far fa-cogs"),
+                       id = "nvpage_tab1",
+                       tabPanel(title = "Arrange Dirs system",
+                                sidebarLayout(
+                                  sidebarPanel(width = 4, id = "write_crop_info",
+                                              h3( tags$strong("Dir creator assistant")),
+                                               textInput(inputId =  "set.crop.name", label = "Please write Crop name") %>%
+                                                 short_info(input = ., place = "top",title = "Name of the major crop"),
+                                               textInput(inputId =  "set.level.name", label = "Please write Race name")%>%
+                                                 short_info(input = ., place = "top",title = "Name of the Race, genetic group, sub-group,class, etc.. to process."),
+                                               textInput(inputId =  "selected.root.folder", label = "Please select a dir path", value = "No dir path selected")%>%
+                                                 short_info(input = ., place = "top",title = "Define the root folder path, where all inputs and outputs will be stored. Press \"Choose Dir\" btn and select a folder from your computer."),
+                                               shinyDirButton(id = "select_path_btn", label = "Choose Dir", title = "Select folder to store all file system", buttonType = "default",
+                                                              class = NULL, icon = NULL, style = NULL),
+                                               div(id ="separator", style = "width:100px; height:15px"),
+                                               radioGroupButtons(inputId = "update_scripts", label = "Update scripts?", choices = c("No","Yes"), individual = F, status = "primary",
+                                                                 checkIcon = list( yes = tags$i(class = "fa fa-circle", 
+                                                                                                style = "color: darkgray"),
+                                                                                   no = tags$i(class = "fa fa-circle-o", 
+                                                                                               style = "color: darkgray"))
+                                               ),
+                                               bsButton("create_dirs", size="default",label = "Create dirs", block = F, style="primary"),
+                                               bsTooltip(id = "create_dirs", title = "Create directories", placement = "right", trigger = "hover")
+                                               
+                                  ),
+                                  mainPanel(
+                                    tags$head(HTML(
+                                      '<style> 
+                             .card {
+                             box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+                             padding: 8px;
+                             border: 1px solid #ccc;
+                             border-radius: 5px; /* 5px rounded corners */
+                             max-width: 800px;
+                             margin: 0 auto;
+                             background-color:white;
+                             }
+                             </style>'
+                                    )),
+                                    div(id = "text_1", class= "card",
+                                        shiny::includeMarkdown("Rmarkdown_files/arrange_dir_text.Rmd")
+                                    )
+                                   
+                                    
+                                  )#end main panel
+                                  
+                                  
+                                )
+                                
+                       ),
+                       tabPanel("Define study area",
+                                sidebarLayout(
+                                  sidebarPanel(
+                                    h3("Region creator assistant"),
+                                    radioGroupButtons("choose_1", label = "", choices  = c("Create mask" = 1, "Import mask"= 2), status = "primary", justified = T ),
+                                    conditionalPanel(condition = "input.choose_1 == '1'",
+                                                     
+                                                     selectInput("area_selector", label = "Select one region:", choices = c("World" = 0,
+                                                                                                                            "America" = 19,
+                                                                                                                            "Europe" = 150,
+                                                                                                                            "Asia" = 142,
+                                                                                                                            "Africa" = 2,
+                                                                                                                            "Oceania" = 9,
+                                                                                                                            "---Custom region---" = 8), selected = 0),
+                                                     #haciendo el conditional panel
+                                                     conditionalPanel( condition = "input.area_selector == 8",
+                                                                       awesomeCheckboxGroup("chk_bx_gr", "Countries selected:", choices = "None", selected = "None", 
+                                                                                           
+                                                                                           status = "primary")
+                                                                       
+                                                     ),
+                                                     textInput("mask_name", label = "Set a name for raster's mask")%>%
+                                                       short_info(input = ., place = "top",title = "Name of the region in which analysis will be performed"),
+                                                     useShinyjs(),
+                                                     withBusyIndicatorUI(
+                                                       button = bsButton("create_mask", size="default",label = "Create Mask", style="primary")
+                                                       
+                                                     ),
+                                                     bsTooltip(id = "create_mask", title = "Create Raster Mask", placement = "left", trigger = "hover")),
+                                    conditionalPanel(condition = "input.choose_1 == '2'",
+                                                     fileInput("mask_path", "Import mask file:",multiple = FALSE,accept = c("image/tiff"), buttonLabel = icon("far fa-search"))%>%
+                                                       short_info(input = ., place = "top",title = "If you have already created a raster mask, please find it and press import button"),
+                                                     withBusyIndicatorUI(
+                                                     bsButton("import_mask", size="default",label = "Import", block = F, style="primary")
+                                                     ))
+                                    
+                                  ),
+                                  mainPanel(
+                                    div(id= "text_2", class = "card",
+                                        shiny::includeMarkdown("Rmarkdown_files/mask_creator_text.Rmd")
+                                    ),
+                                    leafletOutput("map_selector")
+                                    
+                                  )
+                                )
+                                
+                                
+                       ),
+                       tabPanel("Download Inputs",
+                                sidebarLayout(
+                                  sidebarPanel(
+                                    h3("Download Helper"),
+                                    selectInput("download_spam", "Download MapSPAM data?", choices = c( "No" = 1, "Yes" = 2)),
+                                    conditionalPanel(condition = "input.download_spam == 2",
+                                                     selectInput("slct_crop_name", "Select MapSPAM Crop:", choices = unique(urls$screen_name) )
+                                    ),
+                                    selectInput("download_clim", "Download ENVIREM, WorldClim and anthropogenic data?", choices = c("No" = "FALSE", "Yes" = "TRUE")),
+                                    div(style="float:right;width:95px;background-color:lightblue",
+                                        withBusyIndicatorUI(
+                                          bsButton("crop_rasters", size="urldefault",label = "Crop rasters", block = F, style="primary")
+                                        ),bsTooltip(id = "crop_rasters", title = "Crop all rasters using mask", placement = "right", trigger = "hover")
+                                    ),
+                                    withBusyIndicatorUI(
+                                      button = bsButton("download_data", size="default",label = "Download", style="primary")
+                                    ),
+                                    bsTooltip(id = "download_data", title = "Download input rasters", placement = "left", trigger = "hover"),
+                                    verbatimTextOutput("log_output_1")
+                                    
+                                  ),
+                                  mainPanel(
+                                    div(id= "text_dw",  class = "card",
+                                        shiny::includeMarkdown("Rmarkdown_files/download_rasters_text.Rmd")
+                                    )
+                                    
+                                  )
+                                )
+                       ),
+                       tabPanel("Passport data",
+                                sidebarLayout(
+                                  sidebarPanel(
+                                    h3("Data base creator Assistant"),
+                                    tags$hr(),
+                                    fileInput("data_in",
+                                              label = "1. Select .cvs database",
+                                              multiple = FALSE,
+                                              buttonLabel = icon("far fa-search"),
+                                              accept = c("text/csv",
+                                                         "text/comma-separated-values,text/plain",
+                                                         ".csv")
+                                    )%>%
+                                      short_info(input = ., place = "top",title = "Browse passport data file (only .CSV files are accepted)."),
+                                    numericInput("col_number", label = "2. Write the column number of race variable", value = 1, min = 1, max= 999)%>%
+                                      short_info(input = ., place = "top",title = "Column number of response variable (race name, genetic group name, etc.)"),
+                                    withBusyIndicatorUI(
+                                      bsButton("prepare_data", size="default",label = "Set up database", block = F, style="primary")
+                                      
+                                    )
+                                  ),
+                                  mainPanel(
+                                    tabBox(id = "tab_passport",width = 12,
+                                           tabPanel("Description",
+                                                    div(id= "text_3", class = "card",
+                                                        shiny::includeMarkdown("Rmarkdown_files/database_creator.Rmd")
+                                                        
+                                                    )
+                                                    
+                                                    
+                                           ),
+                                           tabPanel("Parameters",
+                                                    div(id = "param_1", class = "card",
+                                                        shiny::includeMarkdown("Rmarkdown_files/database_creator_parameters.Rmd")
+                                                    )
+                                                    
+                                           ),
+                                           tabPanel("Preview data",
+                                                    dataTableOutput("data_prev"),
+                                                    tags$hr(),
+                                                    valueBoxOutput("total_records"),
+                                                    valueBoxOutput("na_count"),
+                                                    valueBoxOutput("na_percent")
+                                                    
+                                                    
+                                           ),
+                                           tabPanel("Results",
+                                                    tags$div(id = "tbl_output", style = "height:800px",
+                                                           boxPlus( title = "Data base output",
+                                                                    status = "primary",
+                                                                    width = NULL,
+                                                                    solidHeader = FALSE,
+                                                                    collapsible = T,
+                                                                    closable = FALSE,
+                                                                    enable_dropdown = FALSE,
+                                                                    DTOutput("data_out")
+                                                           ),
+                                                           tags$hr(),
+                                                           box(title = "Database Summary",
+                                                               width = NULL,
+                                                               status= "primary",
+                                                               accordion(
+                                                                 accordionItem(
+                                                                   id=1,
+                                                                   title = "Counts",
+                                                                   color = "success",
+                                                                   collapsed = FALSE,
+                                                                   fluidRow(
+                                                                         column(7, 
+                                                                                htmlOutput("gchart1")  
+                                                                              ),
+                                                                       column(5,
+                                                                              uiOutput("infbox")
+                                                                              )
+                                                                   )
+                                                                   
+                                                                 ),
+                                                                 accordionItem(
+                                                                   id=2,
+                                                                   title = "Valid records Map",
+                                                                   color = "success",
+                                                                   collapse = TRUE,
+                                                                   leafletOutput("lmap1")
+                                                                 ),
+                                                                 accordionItem(
+                                                                   id = 3,
+                                                                   title = "PCA",
+                                                                   color = "success",
+                                                                   collapsed = TRUE,
+                                                                   plotOutput("pca_res")
+                                                                 )
+                                                                )
+                                                               )
+                                                           )
+                                                    
+                                                    )#end tabPanel
+                                    )#end tabbox
+                                    
+                                    
+                                  )#end mainpanel
+                                  
+                                )#end sidebar layout
+                       )
+                       
+            )#end navarpage
+    ),
+    tabItem(tabName = "tab2",
+            navbarPage(title = icon("fab fa-contao"),
+                       tabPanel("Cost distance",
+                                sidebarLayout(
+                                  sidebarPanel(
+                                    h3(tags$strong("Cost distance function")),
+                                    fileInput("occ_in",
+                                              label = "1. Select Occurrence data",
+                                              multiple = FALSE,
+                                              buttonLabel = icon("far fa-search"),
+                                              accept = c(".csv")
+                                    ),
+                                    fileInput("friction_in",
+                                              label = "2. Select Friction surface raster",
+                                              multiple = FALSE,
+                                              buttonLabel = icon("far fa-search"),
+                                              accept = c(".tif")
+                                    ),
+                                    withBusyIndicatorUI(
+                                      bsButton("calculate_cost", size="default",label = "Create", block = F, style="primary")
+                                      
+                                    )
+                                    
+                                  ),
+                                  mainPanel(
+                                    tabBox(width = 12,
+                                           tabPanel("Description",
+                                                    div(id = "desc_1", class = "card",
+                                                        shiny::includeMarkdown("Rmarkdown_files/cost_dist_desc.Rmd")
+                                                    ),
+                                                    div(class = "card",
+                                                        h4(tags$strong("Cost distance preview")),
+                                                        plotOutput("out_1", height = 250)
+                                                    )
+                                           ),
+                                           tabPanel("Parameters",
+                                                    div(id = "params_2", class = "card",
+                                                       shiny::includeMarkdown("Rmarkdown_files/cost_dist_parameters.Rmd")
+                                                    )
+                                                    
+                                           )
+                                           
+                                    )
+                                  )
+                                )
+                       )
+            )
+            
+            
+    ),
+    tabItem(tabName = "tab3",
+            navbarPage(title = icon("fas fa-globe-americas"),
+                       tabPanel("Pseudo-absences",
+                                sidebarLayout(
+                                  sidebarPanel(
+                                    h3(tags$strong("Pseudo-absences generator")),
+                                    h5(tags$strong("1. Database status")),
+                                    div(id= "ss", htmlOutput("occ_exists")),
+                                    radioButtons("pseudo_method", "2. Pseudo-absences method avaliables:",
+                                                 choices = list("Eco-regions" = "ecoreg",
+                                                                "All the extent" = "all_area"),
+                                                 selected = "all_area"
+                                    ),
+                                    radioButtons("cor_method", "3. Method to remove covariates:",
+                                                 choices = list("Correlation matrix" = 1,
+                                                                "VIF" = 2,
+                                                                "PCA + VIF" = 3),
+                                                 selected = 3
+                                    ),
+                                    withBusyIndicatorUI(
+                                      bsButton("create_pseudo", size="default",label = "Create", block = F, style="primary")
+                                      
+                                    )
+                                    
+                                  ),
+                                  mainPanel(
+                                    tabBox(width = 12,
+                                           tabPanel("Description",
+                                                    div(id = "pesudo_desc", class =  "card",
+                                                        h3(tags$strong("*** Pseudo-absences generator function***")),
+                                                        h4("Aiming to determine the spatial distribution of the landrace variety the model here implemented need some 
+                                                         points(locations, coordinates), chosen randomly from where to compare against the occurrences but they have to 
+                                                         be different and encompass a wide variety of environments over the extent. These random points are known as 
+                                                         Background points or Pseudo-absences."),
+                                                        h4("This Function implements two different methods to select points randomly over the raster mask which was created 
+                                                         before by the assistants/helpers, and also to extract the values from the variables(Crop diversity drivers) and compile 
+                                                         them into a single CSV file."),
+                                                        h4("After all pesudo-absences are generated and filtered then the correlation between crop diversity drivers is
+                                                         evaluated and the most correlated variables will be removed in order to avoid multicolinearity problems with the model."),
+                                                        h4(tags$strong("Output File:"), "CSV file whit occurrences and pseudo-absences identified by 1 and 0 respectively."),
+                                                        h4(tags$strong("File path:"), ".../input_data/by_crop/<crop_name>/lvl_1/<class_name>/<mask_name>/swd/swd_<class_name>.csv")
+                                                        
+                                                    )
+                                           ),
+                                           tabPanel("Parameters",
+                                                    h3(tags$strong("*** Parameter specification ***")),
+                                                    h4("Chek if the database already exists and complies with requirements."),
+                                                    h3(tags$strong("Pseudo-absences Method")),
+                                                    h4(tags$strong("1- Eco-regions method:"), "Basically it consists in choose random points filtering first the places who have an ecology
+                                                         similar to the occurrences through a",  tags$a("Ecology raster", href = "https://www.esri.com/about/newsroom/insider/the-first-detailed-ecological-land-unitsmap-in-the-world/"), ", and after
+                                                         detect which pseudo-absences has similar bioclimatic conditions as occurrences and remove them, lastly draw buffers of 5 km around each occurrence and remove all pseudo-absences inside." ),
+                                                    h4(tags$strong("2- All the extent:"), "Generate randomly Pseudo-absences over all the mask, and remove the ones with equal coordinates as occurrences."),
+                                                    h3(tags$strong("Correlated variables filter")),
+                                                    h4(tags$strong("Correlation matrix:"), "remove correlated variables through inspection to the correlation matrix."),
+                                                    h4(tags$strong("VIF(Variance Inflation Factor):"), "Detect which variables are more correlated using the VIF criterion and remove them."),
+                                                    h4(tags$strong("PCA + VIF:"), "Perform a Principal Component Analysis and identify the variables most correlated
+                                                     with the first principal component, then Detect which of those variables are more correlated using the VIF criterion and remove them.")
+                                                    
+                                                    
+                                                    
+                                           ),
+                                           tabPanel("Resulst",
+                                                    leafletOutput("map2")
+                                           )
+                                    )
+                                  )
+                                )
+                       ),
+                       tabPanel("Model",
+                                sidebarLayout(
+                                  sidebarPanel(
+                                    h3(tags$strong("Landrace distribution")),
+                                    selectInput("calib","Perform Calibration step:", choices = c("Yes" = 1, "No" = 2)),
+                                    conditionalPanel(condition = "input.calib == 2",
+                                                     numericInput("betamp", "Set a default value for Regularity:", value = 1 ,min = 0, max = 20),
+                                                     checkboxGroupInput("feat", "select a default features combination:" ,
+                                                                        choices = c("Linear" = "l",
+                                                                                    "Product" = "p",
+                                                                                    "Quadratic" = "q",
+                                                                                    "Hinge"  = "h"
+                                                                        ) )
+                                    ),
+                                    h3(tags$strong("Model settings")),
+                                    radioButtons("use.maxnet","Select Model:", 
+                                                 choices = list("MaxNet(R package)" = "TRUE", "MaxEnt.jar"= "FALSE"))
+                                    
+                                    
+                                    
+                                    
+                                  ),
+                                  mainPanel(
+                                    tabBox(width = 12,
+                                           tabPanel("Description"),
+                                           tabPanel("Parameters"),
+                                           tabPanel("Results")
+                                    )
+                                  )
+                                  
+                                )
+                       )
+            )
+            
+    ) )#end tabitems
+  
+)#end body
+
+
+dashboardPagePlus(skin = "green",
+  header,
+  sidebar,#dashboardSidebar(disable = F),
+  body
+)
+
