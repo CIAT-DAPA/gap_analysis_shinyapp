@@ -7,55 +7,53 @@
 pseudoAbsences2 <- function(xy, 
                             varstack, 
                             nu = 0.5, 
-                            exclusion.buffer = 0.083*5, 
+                            exclusion.buffer = 20000, 
                             tms = 10){
   
-  
-  proj <- terra::as.data.frame( varstack, xy = T) %>% 
-    drop_na() 
-  
-  nms <- names(proj[, -c(1,2)])
-               
-  mat        <- xy %>% 
-    dplyr::mutate(Y = 1) %>% 
-    dplyr::select(Y, everything(.), -Latitude, -Longitude, all_of(nms) )
-  
-  
-  
-  mod        <- e1071::svm(mat[, -1], y = NULL, type = "one-classification", nu = nu)
-  #proj       <- as.data.frame(cbind(1, coo ))
-  pre        <- predict(mod, proj %>% dplyr::select(-x,-y))
-  proj       <- proj %>% 
-    dplyr::filter(!pre) %>% 
-    dplyr::select(x,y)
-  #presence   <- proj[pre,]
-  
-  presences <- terra::vect(xy %>% dplyr::select(Longitude, Latitude), 
-                           geom = c("Longitude", "Latitude"))
-  crs(presences) <- terra::crs(varstack)
-  spol <- terra::buffer(presences, width = exclusion.buffer) %>% 
-    sf::st_as_sf()
-  
-  to_remove <- terra::mask(varstack[[1]], spol) %>% 
-    terra::extract(x = ., y = proj[, c("x", "y")]) %>% 
-    dplyr::pull(2)
- 
-  set.seed(1234)
-  
-  if(nrow(proj) >  tms * nrow(xy)){
-    proj <- proj %>% 
-      dplyr::filter(is.na(to_remove)) %>%
-      dplyr::slice_sample(.,  n  = tms*nrow(xy)) 
-  }else{
-    proj <- proj %>% 
-      dplyr::filter(is.na(to_remove))
+  if(is.character(xy$Y)){
+    xy$Y <- 1
   }
   
-  proj <- proj %>% 
-    dplyr::rename("Longitude" = x, "Latitude" = y) 
- 
+  xy_vec <- xy %>%
+    dplyr::select(Longitude, Latitude, Y) %>% 
+    terra::vect(., geom = c("Longitude", "Latitude"),  crs = terra::crs(varstack))
   
-  return(proj)
+  #buffer of 20km width
+  spol <- terra::buffer(xy_vec, width = exclusion.buffer) %>%
+    terra::aggregate(., dissolve = T)
+    #sf::st_as_sf()
+  #remove cell within bufffers  
+  to_remove <- terra::mask(varstack[[1]], spol, inverse = T) 
+  varstack  <- terra::mask(varstack, to_remove)
+  
+  if('matrix' %in% class(varstack[[1]][!is.na(varstack[[1]])])){
+    tot_cells <-  length(as.numeric(varstack[[1]][!is.na(varstack[[1]])]))
+  }else{
+    stop('Unssuported class in pseudoAbsences2 function.')
+  }
+  
+  #test if sample sizes matches env raster non-NA cells
+  if(tot_cells > tms * nrow(xy)){
+    n_sample <- tms*nrow(xy)
+  }else{
+    n_sample <- round(tot_cells*0.95, 0)
+  }
+  
+  PA.r <- biomod2::bm_PseudoAbsences(resp.var = xy_vec,
+                                     expl.var = varstack,
+                                     nb.rep = 1,
+                                     nb.absences = n_sample,
+                                     strategy = 'random', #"random"
+                                     #seed.val = 1234,
+                                     sre.quant = 0.025)
+  
+  pseudo <- dplyr::bind_cols(PA.r$xy, PA.r$env) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename("Longitude" = x, "Latitude" = y)
+   
+  
+  
+  return(pseudo)
 }
 
 
@@ -107,51 +105,40 @@ pseudoAbsences_generator <- function(data,
    
     cat("Creating random Pseudo-absences points using: ", pa_method, "method \n")
     
-    
     climLayers <-  terra::rast(fls)
    
     #Remove variables that are causing problems
     #vars_to_remove <- c("Yield", "Production", "Harvested", "drymonths_2_5_min", "monthCountByTemp10", "ethnicity")
-    
     
     if(pa_method == "ecoreg"){
       
       elu     <- terra::rast(ecoreg_path) %>% 
         terra::crop(., terra::ext(msk)) %>% 
         terra::mask(., msk)
-      
-      print(head(spData))
-      
+      #print(head(spData))
       regions <- terra::extract(x = elu, y = spData[,c("Longitude","Latitude")])[,2]
       regions <- sort(unique(regions))
-      
-      
       elu[!(elu %in% regions)] <- NA # Exclude ecoregions that are not in occurrence data
-       
-      
-      
       #unsuit_bg <- OCSVMprofiling2(xy = spData, varstack = climLayers)
       random_bg <- pseudoAbsences2(xy = spData, 
                                    varstack = climLayers %>% terra::mask(., elu),
                                    nu = 0.5,
-                                   exclusion.buffer = 0.083*5,
+                                   exclusion.buffer = 15000,
                                    tms = 10)
       
       
     }
     if(pa_method == "all_area"){
-      
       #unsuit_bg <- OCSVMprofiling2(xy = unique(spData[,c("Longitude","Latitude")]), varstack = climLayers)
-      
       random_bg <- pseudoAbsences2(xy = spData, 
                                    varstack = climLayers,
                                    nu = 0.5,
-                                   exclusion.buffer = 0.083*5,
+                                   exclusion.buffer = 15000,
                                    tms = 10)
      
     }
     
-  
+    stopifnot("climLayers names does not match random_bg names" = all(names(random_bg[, -c(1,2)]) %in% names(climLayers) ))
     
     cat( nrow(random_bg), "pseudo-absences generated for n =", nrow(spData), "presences\n")
     
@@ -163,9 +150,9 @@ pseudoAbsences_generator <- function(data,
     
     
     random_bg <- random_bg %>% 
-      dplyr::bind_cols(., terra::extract(climLayers, .)) %>% 
+      #dplyr::bind_cols(., terra::extract(climLayers, .)) %>% 
       dplyr::mutate(Y = occName) %>% 
-      dplyr::select(Y, Latitude, Longitude, everything(.), -ID) 
+      dplyr::select(Y, Latitude, Longitude, everything(.)) 
     
     
     # Extract variable data

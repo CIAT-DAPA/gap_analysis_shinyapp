@@ -9,10 +9,16 @@
 
 suppressMessages(if(!require(pacman)){install.packages("pacman");library(pacman)}else{library(pacman)})
 pacman::p_load(tcltk, adehabitatHR,   raster, sdm, dismo, distances,   sp, shiny,
-               tidyverse, rlang, sf, gdistance, caret, earth, fastcluster,  FactoMineR, deldir,
-                bindrcpp,  pROC, maxnet, usdm, mltools, ISLR, nnet, HDclassif, rJava,
-               ranger, plotly, terra, gbm, caretEnsemble, ModelMetrics, rminer, e1071, 
-               writexl, rmarkdown, knitr, kableExtra, googleVis)
+               tidyverse, rlang, sf, gdistance, earth, fastcluster, deldir,
+                bindrcpp,  pROC, maxnet, mltools, ISLR, nnet, HDclassif, rJava,
+               ranger, plotly, terra, ModelMetrics, e1071, 
+               writexl, rmarkdown, knitr, kableExtra, googleVis, tidysdm, tune, parsnip, biomod2)
+#usdm
+#rminer
+#gbm
+#caretEnsemble
+#caret
+#FactoMineR
 
 #check if tinytex is installed
 # if(!tinytex::is_tinytex()){
@@ -57,7 +63,7 @@ server <- function(input, output,session) {
 #**********************************
 
   ##monitorear los folders de la mascara si existen o no
-observe({
+shiny::observe({
   
   req(paths$cropDir)
   
@@ -89,7 +95,7 @@ observe({
 })
  
   #monitorear todo el sistema de archivos 
-observe({
+  shiny::observe({
 
   req(paths$results_dir,  paths$input_data_dir)
     #results per race dir
@@ -440,7 +446,7 @@ observeEvent(c(input$map_selector_shape_click, input$area_selector),{
   }) 
  
   #actualizar los paises seleccionados
-observe({ 
+shiny::observe({ 
     if(as.numeric(input$area_selector) == 8){
       updateAwesomeCheckboxGroup(session, inputId = "chk_bx_gr", label = "Countries selected:", choices = clicklist$names, selected = clicklist$names)
    
@@ -1248,7 +1254,7 @@ observe({
                        occName      = paths$occName)
         
         print(paths$mask_path)
-        
+        spDatax <<- resources$cleaned_data
         resources$pseudo_abs <- pseudoAbsences_generator(data        = resources$cleaned_data,
                                                          climDir     = paths$generic_dir, 
                                                          aux_dir     = paths$aux_dir,
@@ -1262,6 +1268,7 @@ observe({
                                                          smd_var_selected_path = paths$smd_var_selected,
                                                          ecoreg_path = "www/masks/World_ELU_2015_5km.tif")
         
+        pseudo_abs <<- resources$pseudo_abs
         
         resources$var_names <- read.csv(paths$smd_var_selected, stringsAsFactors = F) %>% 
           dplyr::pull(x)
