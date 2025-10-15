@@ -169,29 +169,142 @@ Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.
           dplyr::mutate(across(everything(.), as.numeric)) %>% 
           dplyr::mutate(Y = as.factor(Y)) #%>% dplyr::rename(!!occName := Y) # 
         
-        rm(bg_data)
+        
+        for(nm in c("Accessibility", "Irrigation", "population_density_2015", "dist_h_set")){
+          pos <- which(names(spData) == nm)
+          spData[, pos] <- ( spData[, pos] - min( spData[, pos], na.rm = T))/(max( spData[, pos], na.rm = TRUE)- min( spData[, pos], na.rm = T))
+          
+        }
+        
+        #rm(bg_data)
         
         
         cat("Calculating best parameters for maxNet \n")
         cat("This process will take several minutes, please be patient. \n")
         
-        maxent_spec <- tidysdm::maxent(
-          regularization_multiplier = tune::tune(),
-          feature_classes = tune::tune()
-        )
+        tune.args <- list(fc =  
+                            toupper(c("l","lq", "lh", "lqp", "lqhp", "lqhpt")), 
+                          rm = seq(1, 5, by = 1 ))
         
-        cv <- rsample::vfold_cv(spData %>% 
-                                  dplyr::select(-Latitude, -Longitude), v = 5, strata = "Y")
+        compute_TSS <- function(thr, obs, pred_bin) {
+          cm <- table(factor(pred_bin, levels = c(0,1)),
+                      factor(obs, levels = c(0,1))) 
+          # cm forma:       obs=0 obs=1
+          # pred_bin=0      TN     FN
+          # pred_bin=1      FP     TP
+          TN <- cm[1,1]
+          FN <- cm[1,2]
+          FP <- cm[2,1]
+          TP <- cm[2,2]
+          sens <- if ((TP + FN) == 0) 0 else TP / (TP + FN)
+          spec <- if ((TN + FP) == 0) 0 else TN / (TN + FP)
+          return(data.frame(prob = thr, se = sens, es = spec, TSS = sens + spec - 1))
+        }
         
-        maxent_tune_res <- maxent_spec %>%
-          tune::tune_grid(Y ~ ., cv, grid = 15)
+        get_TSS_df <- function(obs, preds){
+          
+          TSS_inner_mat <- data.frame(thr = numeric(), se = numeric(), es = numeric(), TSS = numeric())
+          threshlods <-  seq(0, 1, by = 0.01)
+          
+          for(i in seq_along(threshlods)){
+            
+            thr = threshlods[i]
+            pred_bin <- ifelse(preds >= thr, 1, 0)
+            TSS_inner_mat[i, ] <- compute_TSS(thr, obs, pred_bin)
+            
+          }
+          
+          return(TSS_inner_mat)
+        }
         
-        calibration_txt <- tune::show_best(maxent_tune_res, metric = "roc_auc", n = 10) %>% 
-          dplyr::select(regMult = regularization_multiplier,  
-                        classes = feature_classes,
-                        roc_auc = mean,
-                        metric  = .metric,
-                        std_err )
+        custom_mtrs <- function(vars) {
+          #ajham <<- vars
+          
+          train_pred <- rbind(data.frame(Y = 1, pred = vars$occs.train.pred),
+                              data.frame(Y=0, pred = vars$bg.train.pred))
+          
+          
+          train_roc <- get_TSS_df(obs = train_pred$Y,
+                                  preds = train_pred$pred)
+          
+          
+          #train_PRAUC <- MLmetrics::PRAUC(y_pred = train_pred$pred, y_true = train_pred$Y)
+          
+          #train_roc <- pROC::roc(train_pred, response ="Y", predictor = "pred", quiet = T, ret = "all_coords", direction = "<", algorithm = 3)
+          #train_roc$TSS <- train_roc$sensitivity+train_roc$specificity-1
+          
+          
+          test_pred <- rbind(data.frame(Y =1, pred = vars$occs.val.pred),
+                             data.frame(Y =0, pred = vars$bg.val.pred))
+          
+          
+          #test_PRACU = MLmetrics::PRAUC(y_pred = test_pred$pred, y_true = test_pred$Y)
+          #test_roc <- pROC::roc(test_pred, response ="Y", predictor = "pred", quiet = T, ret = "all_coords", direction = "<", algorithm = 3)
+          
+          #test_roc$TSS <- test_roc$sensitivity+test_roc$specificity-1
+          
+          test_roc <- get_TSS_df(obs = test_pred$Y,
+                                 preds = test_pred$pred)
+          
+          out <- data.frame(train_TSS = max(train_roc$TSS), # train_PRAUC,
+                            val_TSS = max(test_roc$TSS), #test_PRACU,
+                            row.names = NULL)
+          
+          #out_mtrs_df <<- append(out_mtrs_df, list(train_roc))
+          
+          return(out)
+        }
+        
+        
+        
+        eval_res <- ENMeval::ENMevaluate(occs = spData[, -1], #occ[, c("Longitude", "Latitude")], 
+                                         #envs = varstack, 
+                                         bg = bg_data[, -1], #pseudo[, c("Longitude", "Latitude")],
+                                         algorithm = 'maxnet', 
+                                         partitions = 'block',
+                                         partition.settings = list(
+                                           orientation = "lat_lon", 
+                                           kfolds = 5)
+                                         ,tune.args = tune.args,
+                                         raster.preds = F, 
+                                         user.eval = custom_mtrs, 
+                                         doClamp = T)
+        
+        
+        calibration_txt <- eval_res@results.partitions %>% 
+          group_by(tune.args) %>% 
+          dplyr::reframe(median_val_auc = median(auc.val, na.rm = T),
+                         median_train_TSS = median(train_TSS, na.rm =T),
+                         median_val_TSS = median(val_TSS, na.rm = T),
+                         avg_val_auc = mean(auc.val, na.rm = T),
+                         avg_train_TSS = mean(train_TSS, na.rm =T),
+                         avg_val_TSS = mean(val_TSS, na.rm = T)) %>% 
+          as.data.frame() %>% 
+          dplyr::mutate(diff_median = abs((median_val_TSS - median_train_TSS)/median_train_TSS),
+                        diff_avg    = abs((avg_val_TSS - avg_train_TSS)/avg_train_TSS),
+                        classes     = stringr::str_extract(string = tune.args, pattern = "[A-Z]+"),
+                        regMult     = stringr::str_extract(string = tune.args, pattern = "[0-9]{1}"))
+        
+        
+        # maxent_spec <- tidysdm::maxent(
+        #   mode = "classification",
+        #   engine = "maxnet",
+        #   regularization_multiplier = tune::tune(),
+        #   feature_classes = tune::tune()
+        # )
+        # 
+        # cv <- rsample::vfold_cv(spData %>% 
+        #                           dplyr::select(-Latitude, -Longitude), v = 5, strata = "Y")
+        # 
+        # maxent_tune_res <- maxent_spec %>%
+        #   tune::tune_grid(Y ~ ., cv, grid = 15)
+        # 
+        # calibration_txt <- tune::show_best(maxent_tune_res, metric = "roc_auc", n = 10) %>% 
+        #   dplyr::select(regMult = regularization_multiplier,  
+        #                 classes = feature_classes,
+        #                 roc_auc = mean,
+        #                 metric  = .metric,
+        #                 std_err )
         
         write.csv(calibration_txt,  out_path, quote = F, row.names = F)
         
@@ -226,9 +339,9 @@ Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.
       
     }
     
-    args <- calibration_txt[which.max(calibration_txt$roc_auc),]
+    args <- calibration_txt[which.min(calibration_txt$diff_median),] #se elige el modelo que menos sobre ajuste tenga
     
-    feat <- sapply(unlist(base::strsplit(args$classes, "")), letter_to_feat, simplify = T, USE.NAMES = F)
+    feat <- sapply(tolower(unlist(base::strsplit(args$classes, ""))), letter_to_feat, simplify = T, USE.NAMES = F)
     beta <- unlist(args$regMult)
     
     # 

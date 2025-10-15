@@ -23,7 +23,7 @@ generate_report <- function(out_file,
   # 
   occ_G <- read.csv(paths$occ_csv)
   sdm_res_pth <- paste0(paths$sdm_outDir, "/sdm_results.rds")
-  sp_occ <- terra::vect(resources$spData, geom = c("Longitude", "Latitude" ), crs = "epsg:4326" )
+  sp_occ <- terra::vect(paths$occ_shp)#terra::vect(resources$cleaned_data, geom = c("Longitude", "Latitude" ), crs = "epsg:4326" )
   sdm <- terra::rast(paths$sdm_occ_path)
   sdm_res <- readRDS(sdm_res_pth)
   

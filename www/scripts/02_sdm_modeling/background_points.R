@@ -18,6 +18,7 @@ pseudoAbsences2 <- function(xy,
     dplyr::select(Longitude, Latitude, Y) %>% 
     terra::vect(., geom = c("Longitude", "Latitude"),  crs = terra::crs(varstack))
   
+  
   #buffer of 20km width
   spol <- terra::buffer(xy_vec, width = exclusion.buffer) %>%
     terra::aggregate(., dissolve = T)
@@ -121,8 +122,8 @@ pseudoAbsences_generator <- function(data,
       elu[!(elu %in% regions)] <- NA # Exclude ecoregions that are not in occurrence data
       #unsuit_bg <- OCSVMprofiling2(xy = spData, varstack = climLayers)
       random_bg <- pseudoAbsences2(xy = spData, 
-                                   varstack = climLayers %>% terra::mask(., elu),
-                                   nu = 0.5,
+                                   varstack = climLayers %>%  terra::mask(., elu),
+                                   nu = 0.05,
                                    exclusion.buffer = 15000,
                                    tms = 10)
       
@@ -132,7 +133,7 @@ pseudoAbsences_generator <- function(data,
       #unsuit_bg <- OCSVMprofiling2(xy = unique(spData[,c("Longitude","Latitude")]), varstack = climLayers)
       random_bg <- pseudoAbsences2(xy = spData, 
                                    varstack = climLayers,
-                                   nu = 0.5,
+                                   nu = 0.05,
                                    exclusion.buffer = 15000,
                                    tms = 10)
      

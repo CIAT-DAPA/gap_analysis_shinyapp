@@ -11,7 +11,7 @@ suppressMessages(if(!require(pacman)){install.packages("pacman");library(pacman)
 pacman::p_load(tcltk, adehabitatHR,   raster, sdm, dismo, distances,   sp, shiny,
                tidyverse, rlang, sf, gdistance, earth, fastcluster, deldir,
                 bindrcpp,  pROC, maxnet, mltools, ISLR, nnet, HDclassif, rJava,
-               ranger, plotly, terra, ModelMetrics, e1071, 
+               ranger, plotly, terra, ModelMetrics, e1071, caret, 
                writexl, rmarkdown, knitr, kableExtra, googleVis, tidysdm, tune, parsnip, biomod2)
 #usdm
 #rminer
@@ -27,9 +27,10 @@ pacman::p_load(tcltk, adehabitatHR,   raster, sdm, dismo, distances,   sp, shiny
 # setting global variables
 g <- gc(reset = T); rm(list = ls()); options(warn = -1); options(scipen = 999)
 
-shp <- sf::st_read("www/world_shape_simplified/all_countries_simplified.shp") %>% 
-  dplyr::filter(ISO3 != "ATA")
-#shp <- shp[shp@data$ISO3 != "ATA",]
+shp <- sf::st_read("www/world_shape_simplified/all_countries_simplified_new.shp") #%>% 
+#shp_new <- sf::st_read("www/world_shape_simplified/all_countries_simplified_new.shp")
+  #dplyr::filter(ISO3 != "ATA")
+
 scrDir <- "www/scripts"
 coor_sys <- crs("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
 options(shiny.maxRequestSize=100*1024^2)
@@ -390,6 +391,7 @@ shiny::observe({
 #************************************************** 
 observeEvent(c(input$map_selector_shape_click, input$area_selector),{
     proxy <- leafletProxy("map_selector")
+    print(input$area_selector)
     cont <- as.numeric(input$area_selector)
     
     if(cont == 0 | cont == 8){
@@ -1218,7 +1220,7 @@ shiny::observe({
         source("www/scripts/02_sdm_modeling/calibration_function.R")
         source("www/scripts/02_sdm_modeling/tuning_maxNet.R")
         source("www/scripts/02_sdm_modeling/sdm_maxent_java_approach_function.R")
-      
+        source("www/scripts/02_sdm_modeling/pseudo_occ.R")
       
       paths$occName <- as.character(input$select_group)
       
@@ -1254,8 +1256,33 @@ shiny::observe({
                        occName      = paths$occName)
         
         print(paths$mask_path)
-        spDatax <<- resources$cleaned_data
-        resources$pseudo_abs <- pseudoAbsences_generator(data        = resources$cleaned_data,
+        
+        
+        resources$spData <- resources$cleaned_data %>% 
+          dplyr::filter(Y == paths$occName) %>% 
+          dplyr::select(-any_of(c("predicted", "database_id", "source_db")))
+        
+        ##Generar pseudo-presencias cunado n es pequeño
+        
+        nrows <- nrow(resources$spData)
+        
+        tms <- dplyr::case_when(
+          nrows <= 30 ~ 10,
+          nrows > 30 & nrows <= 50 ~ 5,
+          nrows >50 & nrows <=80 ~ 3,
+          .default = 1
+        )
+          
+      
+          resources$spData <- pseudo_occ(xy = resources$spData, 
+                                         clim_dir = paths$generic_dir, 
+                                         aux_clim_dir = paths$aux_dir ,
+                                         tms  = tms,
+                                         nu = 0.05)
+          aa <<- resources$spData
+          bb <<- resources$cleaned_data
+        
+        resources$pseudo_abs <- pseudoAbsences_generator(data        = resources$spData,
                                                          climDir     = paths$generic_dir, 
                                                          aux_dir     = paths$aux_dir,
                                                          clsModel    = "Y", 
@@ -1267,15 +1294,13 @@ shiny::observe({
                                                          mask_path   = paths$mask_path,
                                                          smd_var_selected_path = paths$smd_var_selected,
                                                          ecoreg_path = "www/masks/World_ELU_2015_5km.tif")
-        
-        pseudo_abs <<- resources$pseudo_abs
+        #spDatax <<- resources$cleaned_data
+        #pseudo_abs <<- resources$pseudo_abs
         
         resources$var_names <- read.csv(paths$smd_var_selected, stringsAsFactors = F) %>% 
           dplyr::pull(x)
         
-        resources$spData <- resources$cleaned_data %>% 
-          dplyr::filter(Y == paths$occName) %>% 
-          dplyr::select(-any_of(c("predicted", "database_id", "source_db")))
+       
         
         write.csv(resources$spData, paths$occ_group ,row.names = F)
         
@@ -1284,7 +1309,10 @@ shiny::observe({
           write.csv(.,
                     paths$occ_ids,
                     row.names = F)
-        
+        spData <<- resources$spData %>% 
+          dplyr::select(-any_of("status"))
+                        
+        bg_data <<- resources$pseudo_abs
         #if(input$calib == 1){
           ##no olvidar cambiar el numvero de betas a testear en TrainMaxnet function lo reduje para probar
           params_tunned  <- Calibration_function(spData   = resources$spData %>% 

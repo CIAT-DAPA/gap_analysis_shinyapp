@@ -1,3 +1,41 @@
+compute_se_es <- function(thr, obs, pred_bin) {
+  cm <- table(factor(pred_bin, levels = c(0,1)),
+              factor(obs, levels = c(0,1))) 
+  # cm forma:       obs=0 obs=1
+  # pred_bin=0      TN     FN
+  # pred_bin=1      FP     TP
+  TN <- cm[1,1]
+  FN <- cm[1,2]
+  FP <- cm[2,1]
+  TP <- cm[2,2]
+  sens <- if ((TP + FN) == 0) 0 else TP / (TP + FN)
+  spec <- if ((TN + FP) == 0) 0 else TN / (TN + FP)
+  mcc  <- (TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
+  
+  return(data.frame(sensi = sens, speci = spec, mcc = mcc, threshold = thr))
+}
+
+
+get_sensi_especi_df <- function(obs, preds){
+  
+  TSS_inner_mat <- data.frame( sensi = numeric(), speci = numeric(), mcc = numeric(), threshold = numeric())
+  threshlods <-  seq(0, 1, by = 0.01)
+  
+  for(i in seq_along(threshlods)){
+    
+    thr = threshlods[i]
+    pred_bin <- ifelse(preds >= thr, 1, 0)
+    TSS_inner_mat[i, ] <- compute_se_es(thr, obs, pred_bin)
+    
+  }
+  
+  return(TSS_inner_mat)
+}
+
+
+
+
+
 sdm_maxent_approach_function <- function(occName      = occName,
                                          spData       = spData,
                                          bg_data      = bg_data,
@@ -15,7 +53,11 @@ sdm_maxent_approach_function <- function(occName      = occName,
 {
   
  
-  spData <- dplyr::bind_rows(spData %>% 
+  #si el numero de occurrencias es bajo- entonces se hace
+  
+  
+  
+  spData <- dplyr::bind_rows( spData %>% 
                                dplyr::mutate(Y = 1), 
                              bg_data %>% 
                                dplyr::mutate(Y = 0)) %>% 
@@ -23,7 +65,15 @@ sdm_maxent_approach_function <- function(occName      = occName,
     dplyr::mutate(across(everything(.), as.numeric)) %>% 
     dplyr::select(all_of(occName),  "lon" = Longitude, "lat" = Latitude, all_of(var_names))
   
+  ### prueba escalando variables
   
+  for(nm in c("Accessibility", "Irrigation", "population_density_2015", "dist_h_set")){
+    pos <- which(names(spData) == nm)
+    spData[, pos] <- ( spData[, pos] - min( spData[, pos], na.rm = T))/(max( spData[, pos], na.rm = TRUE)- min( spData[, pos], na.rm = T))
+    
+  }
+  
+  ### fin prueba escalando
   
   cat("Loading environmental raster files \n")
   clim_vars     <- paste0(var_names, ".tif") %in% list.files(climDir, pattern = ".tif$") 
@@ -37,6 +87,25 @@ sdm_maxent_approach_function <- function(occName      = occName,
     clim_layer  <- raster::stack(clim_layer)
   }
   
+  
+  #prueba escalando variables
+  clim_layer <- lapply(1:nlayers(clim_layer), function(i){
+    
+    if(names(clim_layer[[i]]) %in% c("Accessibility", "Irrigation", "population_density_2015", "dist_h_set")){
+      
+      r = clim_layer[[i]]
+      to_ret <- (r - cellStats(r, stat = "min", na.rm = TRUE))/(cellStats(r, stat = "max", na.rm = TRUE)- raster::cellStats(r, stat = "min", na.rm = TRUE))
+      
+      
+    }else{
+      to_ret <- clim_layer[[i]]
+    }
+    return(to_ret)
+    })
+  
+  clim_layer = raster::stack(clim_layer)
+  to_save <<- clim_layer
+  #fin prueba escalando variables
   
   cat("Initializing MAXENT model fitting throught cross validation. \n ")
   
@@ -87,11 +156,21 @@ sdm_maxent_approach_function <- function(occName      = occName,
                                            ,evaluation_train = purrr::map2(.x = predictions_train, .y = .id, function(.x, .y){
                                              
                                              cat("Calculating optimal threshold for model", .y, "\n")
-                                             croc <- pROC::roc(response = .x$obs, predictor = .x$pred)
-                                             croc_summ <- data.frame (sensi = croc$sensitivities, speci = croc$specificities, threshold =  croc$thresholds) %>% 
+                                             
+                                             # croc <- pROC::roc(response = .x$obs, predictor = .x$pred)
+                                             # croc_summ <- data.frame (sensi = croc$sensitivities, speci = croc$specificities, threshold =  croc$thresholds) %>% 
+                                             #   round(., 3) %>% 
+                                             #   dplyr::mutate(., max.TSS = sensi + speci - 1) %>% 
+                                             #   dplyr::mutate(., minROCdist = sqrt((1- sensi)^2 + (speci -1)^2))
+                                             # 
+                                             
+                                             croc_summ <- get_sensi_especi_df(obs = .x$obs,
+                                                           preds = .x$pred) %>% 
                                                round(., 3) %>% 
                                                dplyr::mutate(., max.TSS = sensi + speci - 1) %>% 
                                                dplyr::mutate(., minROCdist = sqrt((1- sensi)^2 + (speci -1)^2))
+                                             
+                                             
                                              
                                              max.tss <- croc_summ %>% dplyr::filter(., max.TSS == max(max.TSS)) %>% 
                                                dplyr::mutate(., method = rep("max(TSS)", nrow(.)))
@@ -128,30 +207,38 @@ sdm_maxent_approach_function <- function(occName      = occName,
                                              
                                              thr <- .x$threshold
                                              
-                                             a <- .z %>% dplyr::filter(., pred >= thr & obs == 1) %>% nrow()
-                                             b <- .z %>% dplyr::filter(., pred >= thr & obs == 0) %>% nrow()
-                                             c <- .z %>% dplyr::filter(., pred < thr & obs == 1) %>% nrow()
-                                             d <- .z %>% dplyr::filter(., pred < thr & obs == 0) %>% nrow()
-                                             
-                                             #senitivity and specificity
-                                             se <- a/(a+c)
-                                             es <- d/(b+d)
-                                             #Matthews correlation coefficient
-                                             den <- sqrt(a+b)*sqrt(a+c)*sqrt(d+b)*sqrt(d+c)
-                                             den <- ifelse(den  != 0 ,den, 1 )
-                                             mcc <- (a*d - b*c)/den
-                                             #Likelyhood Ratio +
-                                             lr_ps <- se/(1 - es)
-                                             #Likelihood ratio -
-                                             lr_ne <- (1 - se)/es
-                                             
-                                             #calculate kappa index
-                                             pr_a <- (a+d)/(a+b+c+d)
-                                             pr_e <- (((a+b)/(a+b+c+d))* ((a+c)/(a+b+c+d))) + ( ((c+d)/(a+b+c+d) )* ((b+d)/(a+b+c+d) )) 
-                                             kappa <- (pr_a - pr_e)/(1 - pr_e) 
+                                             evaluation <- get_sensi_especi_df(obs = .z$obs,
+                                                                              preds = .z$pred) %>% 
+                                               round(., 3) %>% 
+                                               dplyr::mutate(., max.TSS = sensi + speci - 1) %>% 
+                                               dplyr::mutate(., minROCdist = sqrt((1- sensi)^2 + (speci -1)^2))
                                              
                                              
-                                             evaluation <- data.frame(threshold= thr, sensi = se, speci = es, matthews.cor = mcc, LR_pos = lr_ps, LR_neg = lr_ne, kappa_index = kappa)
+                                             
+                                             # a <- .z %>% dplyr::filter(., pred >= thr & obs == 1) %>% nrow()
+                                             # b <- .z %>% dplyr::filter(., pred >= thr & obs == 0) %>% nrow()
+                                             # c <- .z %>% dplyr::filter(., pred < thr & obs == 1) %>% nrow()
+                                             # d <- .z %>% dplyr::filter(., pred < thr & obs == 0) %>% nrow()
+                                             # 
+                                             # #senitivity and specificity
+                                             # se <- a/(a+c)
+                                             # es <- d/(b+d)
+                                             # #Matthews correlation coefficient
+                                             # den <- sqrt(a+b)*sqrt(a+c)*sqrt(d+b)*sqrt(d+c)
+                                             # den <- ifelse(den  != 0 ,den, 1 )
+                                             # mcc <- (a*d - b*c)/den
+                                             # #Likelyhood Ratio +
+                                             # lr_ps <- se/(1 - es)
+                                             # #Likelihood ratio -
+                                             # lr_ne <- (1 - se)/es
+                                             # 
+                                             # #calculate kappa index
+                                             # pr_a <- (a+d)/(a+b+c+d)
+                                             # pr_e <- (((a+b)/(a+b+c+d))* ((a+c)/(a+b+c+d))) + ( ((c+d)/(a+b+c+d) )* ((b+d)/(a+b+c+d) )) 
+                                             # kappa <- (pr_a - pr_e)/(1 - pr_e) 
+                                             # 
+                                             
+                                             #evaluation <- data.frame(threshold= thr, sensi = se, speci = es, matthews.cor = mcc, LR_pos = lr_ps, LR_neg = lr_ne, kappa_index = kappa)
                                              
                                              return(evaluation)
                                              # cat("Calculating optimal threshold for model", .y, "\n")
@@ -198,7 +285,7 @@ sdm_maxent_approach_function <- function(occName      = occName,
                                            #Project rasters using maxnet model for mean, median and sd
                                            , do.projections =  purrr::pmap(list(.x = model_train, .y = .id, .z = evaluation_train) ,function(.x, .y, .z){
                                              
-                                             cat(">>> Proyecting MAXNET model", .y,"to a raster object \n")
+                                             cat(">>> Proyecting MAXENT model", .y,"to a raster object \n")
                                              r <- raster::predict(clim_layer, .x, type = "cloglog", progress='text')
                                              writeRaster(r, paste0(replic_path, "/",occName,"_sdm_cvfold-", .y,".tif"), format="GTiff", overwrite = TRUE)
                                              #thresholding raster 
