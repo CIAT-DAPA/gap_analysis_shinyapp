@@ -120,20 +120,6 @@ letter_to_feat <- function(txt){
 
 Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.maxnet = TRUE){
   cat("Initializing calibration step \n")
-  #suppressMessages(if(!require(pacman)){install.packages("pacman");library(pacman)}else{library(pacman)})
-  #pacman::p_load(devtools, maxnet)
-  # if(!require(enmSdm)){
-  #   devtools::install_github('adamlilith/omnibus')
-  #   devtools::install_github('adamlilith/statisfactory')
-  #   devtools::install_github('adamlilith/enmSdm')
-  #   library(omnibus)
-  #   library(enmSdm)
-  # } else {
-  #   library(omnibus)
-  #   library(statisfactory)
-  #   library(enmSdm)
-  #   require(maxnet)
-  # }
   
   if(ommit == F){
     
@@ -182,9 +168,6 @@ Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.
         cat("Calculating best parameters for maxNet \n")
         cat("This process will take several minutes, please be patient. \n")
         
-        tune.args <- list(fc =  
-                            toupper(c("l","lq", "lh", "lqp", "lqhp", "lqhpt")), 
-                          rm = seq(1, 5, by = 1 ))
         
         compute_TSS <- function(thr, obs, pred_bin) {
           cm <- table(factor(pred_bin, levels = c(0,1)),
@@ -217,25 +200,16 @@ Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.
           return(TSS_inner_mat)
         }
         
-        custom_mtrs <- function(vars) {
+        custom_mtrs <- function(train) {
           #ajham <<- vars
           
-          train_pred <- rbind(data.frame(Y = 1, pred = vars$occs.train.pred),
-                              data.frame(Y=0, pred = vars$bg.train.pred))
+          # train_pred <- rbind(data.frame(Y = 1, pred = vars$occs.train.pred),
+          #                     data.frame(Y=0, pred = vars$bg.train.pred))
           
+          train_pred <- train
           
           train_roc <- get_TSS_df(obs = train_pred$Y,
                                   preds = train_pred$pred)
-          
-          
-          #train_PRAUC <- MLmetrics::PRAUC(y_pred = train_pred$pred, y_true = train_pred$Y)
-          
-          #train_roc <- pROC::roc(train_pred, response ="Y", predictor = "pred", quiet = T, ret = "all_coords", direction = "<", algorithm = 3)
-          #train_roc$TSS <- train_roc$sensitivity+train_roc$specificity-1
-          
-          
-          test_pred <- rbind(data.frame(Y =1, pred = vars$occs.val.pred),
-                             data.frame(Y =0, pred = vars$bg.val.pred))
           
           
           #test_PRACU = MLmetrics::PRAUC(y_pred = test_pred$pred, y_true = test_pred$Y)
@@ -243,12 +217,15 @@ Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.
           
           #test_roc$TSS <- test_roc$sensitivity+test_roc$specificity-1
           
-          test_roc <- get_TSS_df(obs = test_pred$Y,
-                                 preds = test_pred$pred)
-          
-          out <- data.frame(train_TSS = max(train_roc$TSS), # train_PRAUC,
-                            val_TSS = max(test_roc$TSS), #test_PRACU,
+          pos <- which.max(train_roc$TSS)
+          out <- data.frame(thr = train_roc$thr[pos],
+                            train_TSS = train_roc$TSS[pos], # train_PRAUC,
+                            #val_TSS = max(test_roc$TSS), #test_PRACU,
                             row.names = NULL)
+          #train_PRAUC <- MLmetrics::PRAUC(y_pred = train_pred$pred, y_true = train_pred$Y)
+          
+          #train_roc <- pROC::roc(train_pred, response ="Y", predictor = "pred", quiet = T, ret = "all_coords", direction = "<", algorithm = 3)
+          #train_roc$TSS <- train_roc$sensitivity+train_roc$specificity-1
           
           #out_mtrs_df <<- append(out_mtrs_df, list(train_roc))
           
@@ -256,78 +233,94 @@ Calibration_function <- function(spData, bg_data, occName, out_path, ommit, use.
         }
         
         
+        #spData = sp_list$spData
         
-        eval_res <- ENMeval::ENMevaluate(occs = spData[, -1], #occ[, c("Longitude", "Latitude")], 
-                                         #envs = varstack, 
-                                         bg = bg_data[, -1], #pseudo[, c("Longitude", "Latitude")],
-                                         algorithm = 'maxnet', 
-                                         partitions = 'block',
-                                         partition.settings = list(
-                                           orientation = "lat_lon", 
-                                           kfolds = 5)
-                                         ,tune.args = tune.args,
-                                         raster.preds = F, 
-                                         user.eval = custom_mtrs, 
-                                         doClamp = T)
+        #bg_data = sp_list$bg_data
         
         
-        calibration_txt <- eval_res@results.partitions %>% 
-          group_by(tune.args) %>% 
-          dplyr::reframe(median_val_auc = median(auc.val, na.rm = T),
-                         median_train_TSS = median(train_TSS, na.rm =T),
+        tune_rec <- recipes::recipe(spData %>% dplyr::select(-Latitude, -Longitude), Y ~ .)
+        
+        
+        wk_models <- workflowsets::workflow_set(preproc = list(default = tune_rec),
+                                                models =  list( default_maxent  = tidysdm::sdm_spec_maxent()),
+                                                cross = T)
+        
+        spData <- sf::st_make_valid(spData  %>% 
+                                          sf::st_as_sf(., 
+                                                       coords = c("Longitude", "Latitude"), 
+                                                       crs = "EPSG:4326"))
+        
+        cv_folds <- spatialsample::spatial_block_cv(spData, v = 5)
+        
+        
+        
+        fc_vals <- c("l", "lq", "lqp",  "lqph", "lqpht")
+        rm_vals <- seq(1, 5, by = 1)
+        
+        custom_grid <- tidyr::crossing(
+          feature_classes = fc_vals,
+          regularization_multiplier = rm_vals
+        )
+        
+        tunning_df <- plyr::llply(1:nrow(custom_grid), function(row){
+          #cat("processing: ", row, "\n")
+          comb <- custom_grid[row, ]
+          id_txt <- paste0("fc.", comb[1], "_rm.", comb[2])
+          
+          model = tune::finalize_workflow(wk_models$info[[1]]$workflow[[1]], comb)
+          
+          
+          splits_df = lapply(1:nrow(cv_folds),  function(i){
+            
+            split_i <- cv_folds$splits[[i]]
+            
+            fit_train <- parsnip::fit(model , 
+                                      data = rsample::training( split_i) )
+            
+            preds_train <- predict(fit_train, rsample::training(split_i), type = "prob") %>%
+              dplyr::select(pred = .pred_1) %>% 
+              bind_cols(pred = predict(fit_train, rsample::training(split_i))) %>% 
+              bind_cols(Y = rsample::training(split_i)$Y)
+            
+            preds_test <- predict(fit_train, rsample::testing(split_i), type = "prob") %>%
+              dplyr::select(pred = .pred_1) %>% 
+              bind_cols(pred = predict(fit_train, rsample::testing(split_i))) %>% 
+              bind_cols(Y = rsample::testing(split_i)$Y)
+            
+            #train_TSS <- compute_TSS(thr = 0.5, obs = preds_train$Y, pred_bin = preds_train$.pred_class)$TSS
+            
+            
+            res <- custom_mtrs(preds_train)#data.frame(train_TSS = train_TSS, val_TSS = val_TSS)#
+            val_TSS <- compute_TSS(thr = res$thr, obs = preds_test$Y, pred_bin = ifelse(preds_test$pred > res$thr, 1, 0 )  )$TSS
+            
+            res <- cbind(res, val_TSS = val_TSS, tune.args = id_txt, split_id = i, classes = toupper(comb[1]), regMult = as.numeric(comb[2]))
+            
+            return(res)
+            
+          }) %>% dplyr::bind_rows(.)
+          
+          
+          
+          
+          return(splits_df)
+          
+        }, .progress =  "text")
+        
+        calibration_txt <- dplyr::bind_rows(tunning_df) %>%
+          dplyr::group_by(tune.args) %>% 
+          dplyr::reframe(median_train_TSS = median(train_TSS, na.rm =T),
                          median_val_TSS = median(val_TSS, na.rm = T),
-                         avg_val_auc = mean(auc.val, na.rm = T),
                          avg_train_TSS = mean(train_TSS, na.rm =T),
-                         avg_val_TSS = mean(val_TSS, na.rm = T)) %>% 
-          as.data.frame() %>% 
+                         avg_val_TSS = mean(val_TSS, na.rm = T),
+                         classes = unique(classes),
+                         regMult = unique(regMult) ) %>% 
           dplyr::mutate(diff_median = abs((median_val_TSS - median_train_TSS)/median_train_TSS),
-                        diff_avg    = abs((avg_val_TSS - avg_train_TSS)/avg_train_TSS),
-                        classes     = stringr::str_extract(string = tune.args, pattern = "[A-Z]+"),
-                        regMult     = stringr::str_extract(string = tune.args, pattern = "[0-9]{1}"))
+                        diff_avg    = abs((avg_val_TSS - avg_train_TSS)/avg_train_TSS)) 
         
         
-        # maxent_spec <- tidysdm::maxent(
-        #   mode = "classification",
-        #   engine = "maxnet",
-        #   regularization_multiplier = tune::tune(),
-        #   feature_classes = tune::tune()
-        # )
-        # 
-        # cv <- rsample::vfold_cv(spData %>% 
-        #                           dplyr::select(-Latitude, -Longitude), v = 5, strata = "Y")
-        # 
-        # maxent_tune_res <- maxent_spec %>%
-        #   tune::tune_grid(Y ~ ., cv, grid = 15)
-        # 
-        # calibration_txt <- tune::show_best(maxent_tune_res, metric = "roc_auc", n = 10) %>% 
-        #   dplyr::select(regMult = regularization_multiplier,  
-        #                 classes = feature_classes,
-        #                 roc_auc = mean,
-        #                 metric  = .metric,
-        #                 std_err )
         
         write.csv(calibration_txt,  out_path, quote = F, row.names = F)
         
-        
-        
-        # data_train <- spData %>% 
-        #   dplyr::select(-any_of(c("drymonths_2_5_min", "ethnicity", "monthCountByTemp10"))) %>% 
-        #   as.matrix(.)
-        # 
-        # #adding all presence points to background
-        # pres_to_bg <- data_train[which(data_train[, 1] == 1), ]
-        # pres_to_bg[,1] <- rep(0, length(pres_to_bg [, 1]))
-        # 
-        # p <- c(data_train[, 1], pres_to_bg[,1])#adding all presence points to background
-        # data <- rbind(data_train[, -c(1,2,3)], pres_to_bg[, -c(1,2,3)])#adding all presence points to background
-        # 
-        # data <- data.frame(occName = p, data)
-        # 
-        # 
-        # calibration <- trainMaxNet(data = data, regMult = seq(0.5, 4, 0.5), out = 'tuning', verbose = F)
-        # 
-        # write.csv(calibration, out_path, quote = F, row.names = F)
-        # 
         
       }else{
         cat("Calibration File already created, importing it \n")

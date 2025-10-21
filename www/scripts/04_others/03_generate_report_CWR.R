@@ -1,13 +1,12 @@
 
 
 
-generate_report <- function(out_file,
+generate_report_CWR <- function(out_file,
                             paths,
                             resources){
   
-
+  
   cat("Generating HTML report... \n")
-  print(resources$final_gap_map)
   # paths <- list()
   # resources <- list()
   # paths$occName <- "Black_fonio"
@@ -38,21 +37,18 @@ generate_report <- function(out_file,
                                     paste0(auc_m, "%"))
   
   #final gap map
-  auc_txt_gap <- dplyr::case_when(resources$over_all_auc <= 0.5 ~ "lower", 
-                                  resources$over_all_auc > 0.5 & resources$over_all_auc <= 0.75 ~ "regular",
-                                  resources$over_all_auc > 0.75 ~ "good")
-  
+
   pal <- colorBin("RdYlBu", sdm, bins = c(0, .2, .4, .6, .8, 1), na.color = "#00000000", reverse = T)
   full_df_nrow <- length(count.fields(paths$original_path))-1
   
-  up_cov <- resources$overall_simulation_metrics$Value[4]
-  lw_cov <- resources$overall_simulation_metrics$Value[5]
-  me_cov <- (up_cov+lw_cov)/2
+  up_cov <- resources$covg_ll
+  lw_cov <- resources$covg_ll
+  me_cov <- round((up_cov+lw_cov)/2, 3)
   
-    
-    
-    cat(
-      "---
+  
+  
+  cat(
+    "---
 title: \"Gap Analysis Landrace Results\"
 date: \"\`r format(Sys.Date(), '%m-%d-%Y\')\`\"
 output: html_document
@@ -80,13 +76,13 @@ from another region and then locally adapted (Ramirez-Villegas, et al., 2020).
 ### 1. Spatial distribution:
 
 A data cleaning process was applied, during which accessions outside the continental mask and those with duplicated coordinates were removed. 
-The cleaned passport data used for the gap analysis comprises a total of ***\`r nrow(resources$spData) \`*** accessions out of a total of ***\`r full_df_nrow \`***,
-representing  the ***\`r paste0(round(nrow(resources$spData)/full_df_nrow*100, 0), '%') \` *** of the records. The next graph shows the modelled spatial
+The cleaned passport data used for the gap analysis comprises a total of ***\`r nrow(resources$cleaned_data) \`*** accessions out of a total of ***\`r full_df_nrow \`***,
+representing  the ***\`r paste0(round(nrow(resources$cleaned_data)/full_df_nrow*100, 0), '%') \` *** of the records. The next graph shows the modelled spatial
 distribution for the specie. Used accession are shown as darker points.
 
 \`\`\`{r gra1, echo = FALSE, fig.cap='Species distribution map. Dark points indicate the locations of accessions.'}
 
-leaflet(resources$spData) %>% 
+leaflet(resources$cleaned_data) %>% 
     addTiles() %>% 
     addCircleMarkers(lng = ~Longitude,
                lat = ~Latitude,
@@ -121,11 +117,10 @@ will have a \`r paste0(auc_m, \"%\")\` chance of correctly classifying it as eit
 ### 2. Gap Analysis Results:
 
 The map highlights priority areas for seed collection by genebanks, illustrating regions where genetic resources are 
-underrepresented or absent. These areas are identified using three gap scores, which assess the geographic 
-and environmental diversity of existing ex situ conservation collections relative to the specie modeled distribution. 
+underrepresented or absent. Due to a low number of accessions, these areas are identified using only the specie modeled distribution. 
 
 The following map highlights areas in red as potential gaps in genebank collections. 
-These areas represent regions where all three gap scores overlap, indicating a high likelihood of 
+These areas represent suitable region for the crop to grow. Indicating a high likelihood of 
 finding uncollected sample materials. Dark points on map represent the location of accession that are already collected.
 
 
@@ -150,9 +145,7 @@ finding uncollected sample materials. Dark points on map represent the location 
 
 \`\`\`
 
-A process of simulation it's implemented to obtain some perfomance metrics to support in gap maps interpretation.
-Througth the AUC we determine that the estimated gap areas accounts for an averaged precision of ***\`r paste0(round(resources$over_all_auc, 3)*100, '%') \`*** which 
-indicate ***\`r auc_txt_gap\`*** performance. 
+
 
 ---
 
@@ -164,8 +157,8 @@ identified as a gap divided by the total area of the species' distribution.
 
 Coverage is calculated based on the agreement of gap scores:
 
-- The upper limit is estimated using high-probability gaps, where all three gap scores align.
-- The lower limit is determined using medium-probability gaps, where at least two gap scores align.
+- The upper limit is estimated using high-probability gaps.
+- The lower limit is determined using medium-probability gaps.
 - Coverage value is calculated as the mid point between the upper and lower limit.
 
 
@@ -204,13 +197,13 @@ The ***\`r paste0(me_cov, '%')\`*** of the specie distribution is already covere
 
 
 "  
-      ,  file = out_file)
+    ,  file = out_file)
   
   rmarkdown::render(out_file,  "html_document")
-
+  
   #,this value could vary from [***\`r paste0(lw_cov, '%')\`*** - ***\`r paste0(up_cov, '%')\`***].
   
   cat("Process done. Final report generated at:" , out_file,".html  \n")
   #file.remove(out_file)
-
+  
 }#END FUNCTION

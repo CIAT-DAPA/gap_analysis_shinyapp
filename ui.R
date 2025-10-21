@@ -14,8 +14,8 @@ pacman::p_load(shiny, shinydashboard, leaflet, raster, sp, rsconnect, ggplot2,
                shinyFiles, shinyBS, shinyjs, yaml, shinyWidgets, rmarkdown, bsplus, tidyverse, 
                shinydashboardPlus, DT )
 # Define UI for application that draws a histogram
-urls <- read.csv("www/downloadable_files.csv")
-source("www/helpers.R", local = TRUE)
+#urls <- read.csv("www/downloadable_files.csv")
+source("www/scripts/04_others/helpers.R", local = TRUE)
 
 
 header <- shinydashboardPlus::dashboardHeader(
